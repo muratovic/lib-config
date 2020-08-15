@@ -153,6 +153,14 @@ const XMPPEvents = {
     // Designates an event indicating that the MUC has been locked or unlocked.
     MUC_LOCK_CHANGED: 'xmpp.muc_lock_changed',
 
+    // Designates an event indicating that room is private and
+    // participant is host, and password is retrieved.
+    MUC_SEC_VALUE_CHANGED_FOR_SPECIAL_ROOM: 'xmpp.muc_sec_value',
+
+    // Designates an event indicating that room is private or not and
+    // participant is host or not.
+    MUC_ROOM_VISIBILITY_CHANGED: 'xmpp.muc_room_visibility_changed',
+
     // Designates an event indicating that the MUC members only config has changed.
     MUC_MEMBERS_ONLY_CHANGED: 'xmpp.muc_members_only_changed',
 
