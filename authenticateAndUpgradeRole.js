@@ -118,12 +118,13 @@ export default function authenticateAndUpgradeRole({
 
                         resolve();
                     })
-                    .catch(({ error, message }) => {
+                    .catch(({ error, message, sessionId }) => {
                         xmpp.disconnect();
 
                         reject({
                             authenticationError: error,
-                            message
+                            message,
+                            sessionId
                         });
                     });
             });
