@@ -142,6 +142,16 @@ export const LAST_N_ENDPOINTS_CHANGED = 'conference.lastNEndpointsChanged';
 export const LOCK_STATE_CHANGED = 'conference.lock_state_changed';
 
 /**
+ * Indicates that the room is private, participant is host and password is retrieved.
+ */
+export const SEC_VALUE_CHANGED_FOR_SPECIAL_ROOM = 'conference.sec_value_changed_for_special_room';
+
+/**
+ * Indicates that the room is private or not, and participant is host or not.
+ */
+export const ROOM_VISIBILITY_CHANGED = 'conference.room_visibility_changed';
+
+/**
  * Indicates that the region of the media server (jitsi-videobridge) that we
  * are connected to changed (or was initially set).
  * @type {string} the region.

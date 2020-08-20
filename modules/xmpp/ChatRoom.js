@@ -313,6 +313,25 @@ export default class ChatRoom extends Listenable {
                 this.locked = locked;
             }
 
+            logger.warn('will be checking for room privacy...');
+
+            const specialRoom = $(result).find('>query>feature[var="muc_bip_private"]').length === 1;
+
+            const roomOwner = $(result).find('>query>feature[var="muc_bip_owner"]').length === 1;
+
+            this.eventEmitter.emit(XMPPEvents.MUC_ROOM_VISIBILITY_CHANGED, specialRoom, roomOwner);
+
+            if (locked && specialRoom && roomOwner) {
+                const roomSecretValue
+                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_roomsecret"]>value');
+
+                if (roomSecretValue.length) {
+                    this.eventEmitter.emit(XMPPEvents.MUC_SEC_VALUE_CHANGED_FOR_SPECIAL_ROOM, roomSecretValue.text());
+                } else {
+                    logger.warn('No sec value for room');
+                }
+            }
+
             const meetingIdValEl
                 = $(result).find('>query>x[type="result"]>field[var="muc#roominfo_meetingId"]>value');
 

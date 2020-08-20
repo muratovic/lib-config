@@ -419,6 +419,7 @@ Moderator.prototype._allocateConferenceFocusError = function(error, callback) {
     if (reservationErr.length) {
         // Trigger error event
         const errorCode = reservationErr.attr('error-code');
+        const sessionIdError = reservationErr.attr('session-id');
         const errorTextNode = $(error).find('>error>text');
         let errorMsg;
 
@@ -428,7 +429,8 @@ Moderator.prototype._allocateConferenceFocusError = function(error, callback) {
         this.eventEmitter.emit(
             XMPPEvents.RESERVATION_ERROR,
             errorCode,
-            errorMsg);
+            errorMsg,
+            sessionIdError);
 
         return;
     }
@@ -521,7 +523,9 @@ Moderator.prototype.authenticate = function() {
                 error: $(errorIq).find('iq>error :first')
                     .prop('tagName'),
                 message: $(errorIq).find('iq>error>text')
-                    .text()
+                    .text(),
+                sessionId: $(errorIq).find('iq>error>reservation-error')
+                    .attr('session-id')
             })
         );
     });
