@@ -2151,6 +2151,8 @@ TraceablePeerConnection.prototype.setRemoteDescription = function(description) {
  * successful and rejected otherwise.
  */
 TraceablePeerConnection.prototype.setSenderVideoConstraint = function(frameHeight = null) {
+    logger.info(`setSenderVideoConstraint comes...${frameHeight}`);
+
     // XXX: This is not yet supported on mobile.
     if (browser.isReactNative()) {
         return Promise.resolve();
@@ -2165,6 +2167,7 @@ TraceablePeerConnection.prototype.setSenderVideoConstraint = function(frameHeigh
     const localVideoTrack = Array.from(this.localTracks.values()).find(t => t.isVideoTrack());
 
     if (!localVideoTrack || localVideoTrack.isMuted() || localVideoTrack.videoType !== VideoType.CAMERA) {
+        logger.info('setSenderVideoConstraint is exiting...');
         return Promise.resolve();
     }
     const videoSender = this.findSenderByKind(MediaType.VIDEO);
@@ -2177,17 +2180,44 @@ TraceablePeerConnection.prototype.setSenderVideoConstraint = function(frameHeigh
     if (!parameters || !parameters.encodings || !parameters.encodings.length) {
         return Promise.reject(new Error('RTCRtpSendParameters not found for local video track'));
     }
+
+    logger.info(`MURAT setSenderVideoConstraint videoSender parameters:
+        ${JSON.stringify(parameters.encodings)}`);
+
     logger.info(`Setting max height of ${newHeight} on local video`);
 
     if (this.isSimulcastOn()) {
+        logger.info('MURAT setSenderVideoConstraint simulcast is on...');
+
+        this.tpcUtils.simulcastStreamConstraints
+            .forEach(constraint => logger.info(`This constraint ${constraint.height}`));
+
         // Determine the encodings that need to stay enabled based on the
         // new frameHeight provided.
         const encodingsEnabledState = this.tpcUtils.simulcastStreamConstraints
             .map(constraint => constraint.height <= newHeight);
 
+        encodingsEnabledState
+            .forEach(constraint => logger.info(`This enabled state ${constraint}`));
+
+        logger.info(`MURAT remote track count: ${this.remoteTracks.size}`);
+
         for (const encoding in parameters.encodings) {
+            logger.info(`MURAT setSenderVideoConstraint foreach encoding:
+                ${JSON.stringify(parameters.encodings[encoding])}`);
+
             if (parameters.encodings.hasOwnProperty(encoding)) {
                 parameters.encodings[encoding].active = encodingsEnabledState[encoding];
+
+                if (encoding == 0 && parameters.encodings[encoding].active) {
+                    logger.info(`MURAT: current encoding is ${encoding} and active,
+                        scaleDownBy: ${parameters.encodings[encoding].scaleResolutionDownBy}`);
+                    if (this.remoteTracks.size > 4) {
+                        parameters.encodings[encoding].scaleResolutionDownBy = 6.0;
+                    } else if (parameters.encodings[encoding].scaleResolutionDownBy === 6.0) {
+                        parameters.encodings[encoding].scaleResolutionDownBy = 4.0;
+                    }
+                }
             }
         }
     } else {

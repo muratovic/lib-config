@@ -1,5 +1,10 @@
+/* global __filename */
+
 import * as JitsiConferenceEvents from '../../JitsiConferenceEvents';
 import MediaSessionEvents from '../xmpp/MediaSessionEvents';
+import { getLogger } from 'jitsi-meet-logger';
+
+const logger = getLogger(__filename);
 
 /**
  * The class manages send and receive video constraints across media sessions({@link JingleSessionPC}) which belong to
@@ -37,6 +42,7 @@ export class QualityController {
         mediaSession.addListener(
             MediaSessionEvents.REMOTE_VIDEO_CONSTRAINTS_CHANGED,
             session => {
+                logger.warn(`MURAT REMOTE_VIDEO_CONSTRAINTS_CHANGED event caught...`);
                 if (session === this.conference._getActiveMediaSession()) {
                     this._propagateSendMaxFrameHeight();
                 }

@@ -349,6 +349,8 @@ export default class RTC extends Listenable {
      * @private
      */
     _senderVideoConstraintsChanged(senderVideoConstraints) {
+        logger.warn(`MURAT _senderVideoConstraintsChanged method called...`);
+
         this._senderVideoConstraints = senderVideoConstraints;
         this.eventEmitter.emit(RTCEvents.SENDER_VIDEO_CONSTRAINTS_CHANGED);
     }

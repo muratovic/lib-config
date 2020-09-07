@@ -586,6 +586,7 @@ export default class JingleSessionPC extends JingleSession {
             // SENDER_VIDEO_CONSTRAINTS_CHANGED events and notify the peer connection
             this._removeSenderVideoConstraintsChangeListener = this.rtc.addListener(
                 RTCEvents.SENDER_VIDEO_CONSTRAINTS_CHANGED, () => {
+                    logger.warn(`MURAT SENDER_VIDEO_CONSTRAINTS_CHANGED event caught...`);
                     this.eventEmitter.emit(
                         MediaSessionEvents.REMOTE_VIDEO_CONSTRAINTS_CHANGED, this);
                 });
