@@ -3299,6 +3299,10 @@ JitsiConference.prototype.setSenderVideoConstraint = function(maxFrameHeight) {
     return this.qualityController.setPreferredSendMaxFrameHeight(maxFrameHeight);
 };
 
+JitsiConference.prototype.setSenderVideoConstraintForBip = function(maxFrameHeight) {
+    return this.qualityController.setPreferredSendMaxFrameHeightForBip(maxFrameHeight);
+};
+
 /**
  * Creates a video SIP GW session and returns it if service is enabled. Before
  * creating a session one need to check whether video SIP GW service is

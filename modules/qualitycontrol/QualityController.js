@@ -121,4 +121,14 @@ export class QualityController {
 
         return this._propagateSendMaxFrameHeight();
     }
+
+    setPreferredSendMaxFrameHeightForBip(maxFrameHeight) {
+        const promises = [];
+        for (const session of this.conference._getMediaSessions()) {
+            promises.push(session.setSenderVideoConstraint(maxFrameHeight));
+        }
+
+        return Promise.all(promises);
+
+    }
 }

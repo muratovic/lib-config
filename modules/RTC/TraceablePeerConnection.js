@@ -1987,8 +1987,15 @@ TraceablePeerConnection.prototype.setSenderVideoDegradationPreference = function
 
             logger.info(`Setting video sender degradation preference on ${this} to ${preference}`);
             parameters.encodings[encoding].degradationPreference = preference;
+
+            if (encoding == 0 && parameters.encodings[encoding].active) {
+                delete parameters.encodings[encoding].scaleResolutionDownBy;
+            }
         }
     }
+
+    parameters.encodings
+        .forEach(encoding => logger.info(`MURAT: DESKTOP SHARE before sending parameters ${JSON.stringify(encoding)}`));
     videoSender.setParameters(parameters);
 };
 
@@ -2210,12 +2217,12 @@ TraceablePeerConnection.prototype.setSenderVideoConstraint = function(frameHeigh
                 parameters.encodings[encoding].active = encodingsEnabledState[encoding];
 
                 if (encoding == 0 && parameters.encodings[encoding].active) {
-                    logger.info(`MURAT: current encoding is ${encoding} and active,
+                    logger.info(`MURAT: before encoding change is ${encoding} and active,
                         scaleDownBy: ${parameters.encodings[encoding].scaleResolutionDownBy}`);
-                    if (this.remoteTracks.size > 4) {
+                    if (this.rtc.conference.getParticipantCount() > 3) {
                         parameters.encodings[encoding].scaleResolutionDownBy = 6.0;
                     } else if (parameters.encodings[encoding].scaleResolutionDownBy === 6.0) {
-                        parameters.encodings[encoding].scaleResolutionDownBy = 4.0;
+                        delete parameters.encodings[encoding].scaleResolutionDownBy;
                     }
                 }
             }
@@ -2223,6 +2230,9 @@ TraceablePeerConnection.prototype.setSenderVideoConstraint = function(frameHeigh
     } else {
         parameters.encodings[0].scaleResolutionDownBy = Math.floor(localVideoTrack.resolution / newHeight);
     }
+
+    parameters.encodings
+        .forEach(encoding => logger.info(`MURAT: before sending parameters ${JSON.stringify(encoding)}`));
 
     return videoSender.setParameters(parameters).then(() => {
         localVideoTrack.maxEnabledResolution = newHeight;
