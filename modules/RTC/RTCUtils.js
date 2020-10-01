@@ -6,22 +6,24 @@
           RTCSessionDescription: true
 */
 
-import { AVAILABLE_DEVICE } from '../../service/statistics/AnalyticsEvents';
-import CameraFacingMode from '../../service/RTC/CameraFacingMode';
 import EventEmitter from 'events';
 import { getLogger } from 'jitsi-meet-logger';
 import clonedeep from 'lodash.clonedeep';
-import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
+
 import JitsiTrackError from '../../JitsiTrackError';
-import Listenable from '../util/Listenable';
+import CameraFacingMode from '../../service/RTC/CameraFacingMode';
 import * as MediaType from '../../service/RTC/MediaType';
-import Resolutions from '../../service/RTC/Resolutions';
-import browser from '../browser';
 import RTCEvents from '../../service/RTC/RTCEvents';
-import screenObtainer from './ScreenObtainer';
-import SDPUtil from '../xmpp/SDPUtil';
-import Statistics from '../statistics/statistics';
+import Resolutions from '../../service/RTC/Resolutions';
 import VideoType from '../../service/RTC/VideoType';
+import { AVAILABLE_DEVICE } from '../../service/statistics/AnalyticsEvents';
+import browser from '../browser';
+import Statistics from '../statistics/statistics';
+import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
+import Listenable from '../util/Listenable';
+import SDPUtil from '../xmpp/SDPUtil';
+
+import screenObtainer from './ScreenObtainer';
 
 const logger = getLogger(__filename);
 
@@ -319,11 +321,13 @@ function getConstraints(um, options = {}) {
             // Provide constraints as described by the electron desktop capturer
             // documentation here:
             // https://www.electronjs.org/docs/api/desktop-capturer
+            // Note. The documentation specifies that chromeMediaSourceId should not be present
+            // which, in the case a users has multiple monitors, leads to them being shared all
+            // at once. However we tested with chromeMediaSourceId present and it seems to be
+            // working properly and also takes care of the previously mentioned issue.
             constraints.audio = { mandatory: {
                 chromeMediaSource: constraints.video.mandatory.chromeMediaSource
             } };
-
-            delete constraints.video.mandatory.chromeMediaSourceId;
         }
     }
 
@@ -813,7 +817,7 @@ class RTCUtils extends Listenable {
             logger.info(`Disable HPF: ${disableHPF}`);
         }
 
-        availableDevices = undefined;
+        availableDevices = [];
         window.clearInterval(availableDevicesPollTimer);
         availableDevicesPollTimer = undefined;
 

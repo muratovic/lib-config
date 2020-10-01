@@ -1,6 +1,5 @@
 /* global __filename */
 
-import { createWorkerScript } from './Worker';
 import { getLogger } from 'jitsi-meet-logger';
 
 const logger = getLogger(__filename);
@@ -22,24 +21,38 @@ const kJitsiE2EE = Symbol('kJitsiE2EE');
  * - allow for the key to be rotated frequently.
  */
 export default class E2EEcontext {
-
     /**
      * Build a new E2EE context instance, which will be used in a given conference.
      *
      * @param {string} options.salt - Salt to be used for key deviation.
-     *      FIXME: We currently use the MUC room name for this which has the same lifetime
-     *      as this context. While not (pseudo)random as recommended in
-     *        https://developer.mozilla.org/en-US/docs/Web/API/Pbkdf2Params
-     *      this is easily available and the same for all participants.
-     *      We currently do not enforce a minimum length of 16 bytes either.
+     * FIXME: We currently use the MUC room name for this which has the same lifetime
+     * as this context. While not (pseudo)random as recommended in
+     * https://developer.mozilla.org/en-US/docs/Web/API/Pbkdf2Params
+     * this is easily available and the same for all participants.
+     * We currently do not enforce a minimum length of 16 bytes either.
      */
     constructor(options) {
         this._options = options;
 
-        // Initialize the E2EE worker.
-        this._worker = new Worker(createWorkerScript(), {
-            name: 'E2EE Worker'
-        });
+        // Determine the URL for the worker script. Relative URLs are relative to
+        // the entry point, not the script that launches the worker.
+        let baseUrl = '';
+        const ljm = document.querySelector('script[src*="lib-jitsi-meet"]');
+
+        if (ljm) {
+            const idx = ljm.src.lastIndexOf('/');
+
+            baseUrl = `${ljm.src.substring(0, idx)}/`;
+        }
+
+        // Initialize the E2EE worker. In order to avoid CORS issues, start the worker and have it
+        // synchronously load the JS.
+        const workerUrl = `${baseUrl}lib-jitsi-meet.e2ee-worker.js`;
+        const workerBlob
+            = new Blob([ `importScripts("${workerUrl}");` ], { type: 'application/javascript' });
+        const blobUrl = window.URL.createObjectURL(workerBlob);
+
+        this._worker = new Worker(blobUrl, { name: 'E2EE Worker' });
         this._worker.onerror = e => logger.onerror(e);
 
         // Initialize the salt and convert it once.
@@ -49,6 +62,19 @@ export default class E2EEcontext {
         this._worker.postMessage({
             operation: 'initialize',
             salt: encoder.encode(options.salt)
+        });
+    }
+
+    /**
+     * Cleans up all state associated with the given participant. This is needed when a
+     * participant leaves the current conference.
+     *
+     * @param {string} participantId - The participant that just left.
+     */
+    cleanup(participantId) {
+        this._worker.postMessage({
+            operation: 'cleanup',
+            participantId
         });
     }
 
@@ -77,10 +103,11 @@ export default class E2EEcontext {
 
         this._worker.postMessage({
             operation: 'decode',
-            readableStream: receiverStreams.readableStream,
-            writableStream: receiverStreams.writableStream,
+            readableStream: receiverStreams.readable || receiverStreams.readableStream,
+            writableStream: receiverStreams.writable || receiverStreams.writableStream,
             participantId
-        }, [ receiverStreams.readableStream, receiverStreams.writableStream ]);
+        }, [ receiverStreams.readable || receiverStreams.readableStream,
+            receiverStreams.writable || receiverStreams.writableStream ]);
     }
 
     /**
@@ -108,31 +135,26 @@ export default class E2EEcontext {
 
         this._worker.postMessage({
             operation: 'encode',
-            readableStream: senderStreams.readableStream,
-            writableStream: senderStreams.writableStream,
+            readableStream: senderStreams.readable || senderStreams.readableStream,
+            writableStream: senderStreams.writable || senderStreams.writableStream,
             participantId
-        }, [ senderStreams.readableStream, senderStreams.writableStream ]);
+        }, [ senderStreams.readable || senderStreams.readableStream,
+            senderStreams.writable || senderStreams.writableStream ]);
     }
 
     /**
-     * Sets the key to be used for E2EE.
+     * Set the E2EE key for the specified participant.
      *
-     * @param {string} value - Value to be used as the new key. May be falsy to disable end-to-end encryption.
+     * @param {string} participantId - the ID of the participant who's key we are setting.
+     * @param {Uint8Array | boolean} key - they key for the given participant.
+     * @param {Number} keyIndex - the key index.
      */
-    setKey(value) {
-        let key;
-
-        if (value) {
-            const encoder = new TextEncoder();
-
-            key = encoder.encode(value);
-        } else {
-            key = false;
-        }
-
+    setKey(participantId, key, keyIndex) {
         this._worker.postMessage({
             operation: 'setKey',
-            key
+            participantId,
+            key,
+            keyIndex
         });
     }
 }

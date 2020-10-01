@@ -2,19 +2,21 @@
 
 import { getLogger } from 'jitsi-meet-logger';
 
-import BridgeChannel from './BridgeChannel';
-import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import * as JitsiConferenceEvents from '../../JitsiConferenceEvents';
-import JitsiLocalTrack from './JitsiLocalTrack';
+import * as MediaType from '../../service/RTC/MediaType';
+import RTCEvents from '../../service/RTC/RTCEvents';
+import VideoType from '../../service/RTC/VideoType';
+import browser from '../browser';
+import Statistics from '../statistics/statistics';
+import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
 import Listenable from '../util/Listenable';
 import { safeCounterIncrement } from '../util/MathUtil';
-import * as MediaType from '../../service/RTC/MediaType';
-import browser from '../browser';
-import RTCEvents from '../../service/RTC/RTCEvents';
+
+import BridgeChannel from './BridgeChannel';
+import JitsiLocalTrack from './JitsiLocalTrack';
 import RTCUtils from './RTCUtils';
-import Statistics from '../statistics/statistics';
 import TraceablePeerConnection from './TraceablePeerConnection';
-import VideoType from '../../service/RTC/VideoType';
+
 
 const logger = getLogger(__filename);
 
@@ -515,8 +517,8 @@ export default class RTC extends Listenable {
         if (options.enableInsertableStreams) {
             logger.debug('E2EE - setting insertable streams constraints');
             iceConfig.encodedInsertableStreams = true;
-            iceConfig.forceEncodedAudioInsertableStreams = true; // legacy, to be removed in M85.
-            iceConfig.forceEncodedVideoInsertableStreams = true; // legacy, to be removed in M85.
+            iceConfig.forceEncodedAudioInsertableStreams = true; // legacy, to be removed in M88.
+            iceConfig.forceEncodedVideoInsertableStreams = true; // legacy, to be removed in M88.
         }
 
         if (browser.supportsSdpSemantics()) {

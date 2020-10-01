@@ -1,12 +1,11 @@
 import EventEmitter from 'events';
 
-import * as MediaType from './service/RTC/MediaType';
-import browser from './modules/browser';
-import RTC from './modules/RTC/RTC';
-import RTCEvents from './service/RTC/RTCEvents';
-import Statistics from './modules/statistics/statistics';
-
 import * as JitsiMediaDevicesEvents from './JitsiMediaDevicesEvents';
+import RTC from './modules/RTC/RTC';
+import browser from './modules/browser';
+import Statistics from './modules/statistics/statistics';
+import * as MediaType from './service/RTC/MediaType';
+import RTCEvents from './service/RTC/RTCEvents';
 
 const AUDIO_PERMISSION_NAME = 'microphone';
 const PERMISSION_GRANTED_STATUS = 'granted';
@@ -221,7 +220,7 @@ class JitsiMediaDevices {
     setAudioOutputDevice(deviceId) {
         const availableDevices = RTC.getCurrentlyAvailableMediaDevices();
 
-        if (availableDevices && availableDevices.length > 0) {
+        if (availableDevices.length > 0) {
             // if we have devices info report device to stats
             // normally this will not happen on startup as this method is called
             // too early. This will happen only on user selection of new device

@@ -1,11 +1,13 @@
 import { browsers } from '@jitsi/js-utils';
+import { getLogger } from 'jitsi-meet-logger';
 
-import * as StatisticsEvents from '../../service/statistics/Events';
 import * as MediaType from '../../service/RTC/MediaType';
+import * as StatisticsEvents from '../../service/statistics/Events';
 import browser from '../browser';
 
 const GlobalOnErrorHandler = require('../util/GlobalOnErrorHandler');
-const logger = require('jitsi-meet-logger').getLogger(__filename);
+
+const logger = getLogger(__filename);
 
 /**
  * The lib-jitsi-meet browser-agnostic names of the browser-specific keys
@@ -301,11 +303,15 @@ StatsCollector.prototype.start = function(startAudioLevelStats) {
 
                     for (const ssrc in audioLevels) {
                         if (audioLevels.hasOwnProperty(ssrc)) {
+                            // Use a scaling factor of 2.5 to report the same
+                            // audio levels that getStats reports.
+                            const audioLevel = audioLevels[ssrc] * 2.5;
+
                             this.eventEmitter.emit(
                                 StatisticsEvents.AUDIO_LEVEL,
                                 this.peerconnection,
                                 Number.parseInt(ssrc, 10),
-                                audioLevels[ssrc],
+                                audioLevel,
                                 false /* isLocal */);
                         }
                     }
