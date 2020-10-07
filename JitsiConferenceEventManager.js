@@ -328,12 +328,12 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
         conference.onUserRoleChanged.bind(conference));
 
     chatRoom.addListener(AuthenticationEvents.IDENTITY_UPDATED,
-        (authEnabled, authIdentity) => {
+        (authEnabled, authIdentity, confDuration) => {
             conference.authEnabled = authEnabled;
             conference.authIdentity = authIdentity;
             conference.eventEmitter.emit(
                 JitsiConferenceEvents.AUTH_STATUS_CHANGED, authEnabled,
-                authIdentity);
+                authIdentity, confDuration);
         });
 
     chatRoom.addListener(
