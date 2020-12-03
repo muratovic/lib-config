@@ -851,7 +851,9 @@ export default class ChatRoom extends Listenable {
             msg.c(elementName, { xmlns: 'http://jitsi.org/jitmeet' }, message)
                 .up();
         }
-        if (nickname) {
+        if (nickname
+            && elementName !== 'json-message'
+            && JSON.stringify(message).name !== 'endpoint-toggle-raise-hand-access') {
             msg.c('nick', { xmlns: 'http://jabber.org/protocol/nick' })
                 .t(nickname)
                 .up()
