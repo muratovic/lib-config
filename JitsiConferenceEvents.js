@@ -72,6 +72,11 @@ export const DATA_CHANNEL_OPENED = 'conference.dataChannelOpened';
 export const DISPLAY_NAME_CHANGED = 'conference.displayNameChanged';
 
 /**
+ * Videoaccess has been changed for participant.
+ */
+export const VIDEOACCESS_CHANGED_FOR_PARTICIPANT = 'conference.videoAccessChangedForParticipant';
+
+/**
  * The dominant speaker was changed.
  */
 export const DOMINANT_SPEAKER_CHANGED = 'conference.dominantSpeaker';

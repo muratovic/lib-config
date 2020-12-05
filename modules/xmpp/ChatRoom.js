@@ -687,6 +687,12 @@ export default class ChatRoom extends Listenable {
             const node = nodes[i];
 
             switch (node.tagName) {
+            case 'videoaccess':
+                this.eventEmitter.emit(
+                    XMPPEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT,
+                    from,
+                    node.value);
+                break;
             case 'nick':
                 if (!member.isFocus) {
                     const displayName

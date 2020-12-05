@@ -60,6 +60,11 @@ const XMPPEvents = {
     DISPLAY_NAME_CHANGED: 'xmpp.display_name_changed',
 
     /**
+     * Videoaccess prop has been changed for participant.
+     */
+    VIDEOACCESS_CHANGED_FOR_PARTICIPANT: 'xmpp.videoaccess_changed_for_participant',
+
+    /**
      * Chat room instance have been added to Strophe.emuc plugin.
      */
     EMUC_ROOM_ADDED: 'xmpp.emuc_room_added',

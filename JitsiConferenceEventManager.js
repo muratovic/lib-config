@@ -306,6 +306,9 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
     chatRoom.addListener(XMPPEvents.DISPLAY_NAME_CHANGED,
         conference.onDisplayNameChanged.bind(conference));
 
+    this.chatRoomForwarder.forward(XMPPEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT,
+        JitsiConferenceEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT);
+
     chatRoom.addListener(XMPPEvents.LOCAL_ROLE_CHANGED, role => {
         conference.onLocalRoleChanged(role);
 
