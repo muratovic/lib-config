@@ -687,10 +687,28 @@ export default class ChatRoom extends Listenable {
             const node = nodes[i];
 
             switch (node.tagName) {
+            case 'raise-hand-access':
+                this.eventEmitter.emit(
+                    XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_PARTICIPANT,
+                    Strophe.getResourceFromJid(from),
+                    node.value);
+                break;
+            case 'screen-share-access':
+                this.eventEmitter.emit(
+                    XMPPEvents.SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT,
+                    Strophe.getResourceFromJid(from),
+                    node.value);
+                break;
+            case 'microphoneaccess':
+                this.eventEmitter.emit(
+                    XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT,
+                    Strophe.getResourceFromJid(from),
+                    node.value);
+                break;
             case 'videoaccess':
                 this.eventEmitter.emit(
                     XMPPEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT,
-                    from,
+                    Strophe.getResourceFromJid(from),
                     node.value);
                 break;
             case 'nick':

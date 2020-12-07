@@ -77,6 +77,21 @@ export const DISPLAY_NAME_CHANGED = 'conference.displayNameChanged';
 export const VIDEOACCESS_CHANGED_FOR_PARTICIPANT = 'conference.videoAccessChangedForParticipant';
 
 /**
+ * Microphone access has been changed for participant.
+ */
+export const MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.microphoneAccessChangedForParticipant';
+
+/**
+ * Screen share access has been changed for participant.
+ */
+export const SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.screenShareAccessChangedForParticipant';
+
+/**
+ * Raise hand access has been changed for participant.
+ */
+export const RAISE_HAND_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.raiseHandAccessChangedForParticipant';
+
+/**
  * The dominant speaker was changed.
  */
 export const DOMINANT_SPEAKER_CHANGED = 'conference.dominantSpeaker';
