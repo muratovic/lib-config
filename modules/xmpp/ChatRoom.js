@@ -164,7 +164,6 @@ export default class ChatRoom extends Listenable {
         // Jicofo makes decisions based on that. Initialize it with 'false'
         // here.
         this.addVideoInfoToPresence(false);
-        this.addDefaultRaiseHandAccessToPresence();
 
         if (options.deploymentInfo && options.deploymentInfo.userRegion) {
             this.presMap.nodes.push({
@@ -1570,16 +1569,6 @@ export default class ChatRoom extends Listenable {
             {
                 attributes: { 'xmlns': 'http://jitsi.org/jitmeet/video' },
                 value: mute.toString()
-            });
-    }
-
-    /**
-     * Set true as initial value of raise hand access.
-     */
-    addDefaultRaiseHandAccessToPresence() {
-        this.addToPresence(
-            'raise-hand-access', {
-                value: 'true'
             });
     }
 
