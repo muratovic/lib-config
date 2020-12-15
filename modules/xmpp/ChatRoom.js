@@ -705,9 +705,21 @@ export default class ChatRoom extends Listenable {
                     Strophe.getResourceFromJid(from),
                     node.value);
                 break;
+            case 'microphoneaccess-broadcast':
+                this.eventEmitter.emit(
+                    XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                    Strophe.getResourceFromJid(from),
+                    node.value);
+                break;
             case 'videoaccess':
                 this.eventEmitter.emit(
                     XMPPEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT,
+                    Strophe.getResourceFromJid(from),
+                    node.value);
+                break;
+            case 'videoaccess-broadcast':
+                this.eventEmitter.emit(
+                    XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
                     Strophe.getResourceFromJid(from),
                     node.value);
                 break;

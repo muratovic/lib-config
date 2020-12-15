@@ -77,9 +77,19 @@ export const DISPLAY_NAME_CHANGED = 'conference.displayNameChanged';
 export const VIDEOACCESS_CHANGED_FOR_PARTICIPANT = 'conference.videoAccessChangedForParticipant';
 
 /**
+ * Videoaccess has been changed for all participants.
+ */
+export const VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS = 'conference.videoAccessChangedForAllParticipants';
+
+/**
  * Microphone access has been changed for participant.
  */
 export const MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.microphoneAccessChangedForParticipant';
+
+/**
+ * Microphone access has been changed for all participants.
+ */
+export const MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS = 'conference.microphoneAccessChangedForAllParticipants';
 
 /**
  * Screen share access has been changed for participant.

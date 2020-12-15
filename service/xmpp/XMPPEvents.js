@@ -65,9 +65,19 @@ const XMPPEvents = {
     VIDEOACCESS_CHANGED_FOR_PARTICIPANT: 'xmpp.videoaccess_changed_for_participant',
 
     /**
+     * Videoaccess prop has been changed for participant.
+     */
+    VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS: 'xmpp.videoaccess_changed_for_all_participants',
+
+    /**
      * Microphone prop has been changed for participant.
      */
     MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT: 'xmpp.microphone_access_changed_for_participant',
+
+    /**
+     * Microphone prop has been changed for all participants.
+     */
+    MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS: 'xmpp.microphone_access_changed_for_all_participants',
 
     /**
      * Screen share prop has been changed for participant.

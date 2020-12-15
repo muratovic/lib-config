@@ -309,8 +309,14 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
     this.chatRoomForwarder.forward(XMPPEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT,
         JitsiConferenceEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT);
 
+    this.chatRoomForwarder.forward(XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+        JitsiConferenceEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS);
+
     this.chatRoomForwarder.forward(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT,
         JitsiConferenceEvents.MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT);
+
+    this.chatRoomForwarder.forward(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+        JitsiConferenceEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS);
 
     this.chatRoomForwarder.forward(XMPPEvents.SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT,
         JitsiConferenceEvents.SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT);
