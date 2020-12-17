@@ -1447,6 +1447,15 @@ JitsiConference.prototype.kickParticipant = function(id) {
     this.room.kick(participant.getJid());
 };
 
+
+JitsiConference.prototype.sendMicrophoneBroadcastPermissionIQ = function(value) {
+    this.room.sendMicrophoneBroadcastPermissionIQ(value);
+};
+
+JitsiConference.prototype.sendCameraBroadcastPermissionIQ = function(value) {
+    this.room.sendCameraBroadcastPermissionIQ(value);
+};
+
 /**
  * Maybe clears the timeout which emits {@link ACTION_JINGLE_SI_TIMEOUT}
  * analytics event.

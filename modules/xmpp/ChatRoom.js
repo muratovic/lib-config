@@ -321,6 +321,22 @@ export default class ChatRoom extends Listenable {
 
             this.eventEmitter.emit(XMPPEvents.MUC_ROOM_VISIBILITY_CHANGED, specialRoom, roomOwner);
 
+            const roomHasMicrophoneBroadcastPermissionValue
+                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_microphone"]>value');
+
+            if (roomHasMicrophoneBroadcastPermissionValue.length) {
+                this.eventEmitter.emit(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                    roomHasMicrophoneBroadcastPermissionValue.text());
+            }
+
+            const roomHasCameraBroadcastPermissionValue
+                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_camera"]>value');
+
+            if (roomHasCameraBroadcastPermissionValue.length) {
+                this.eventEmitter.emit(XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                    roomHasCameraBroadcastPermissionValue.text());
+            }
+
             if (locked && specialRoom && roomOwner) {
                 const roomSecretValue
                     = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_roomsecret"]>value');
@@ -705,21 +721,9 @@ export default class ChatRoom extends Listenable {
                     Strophe.getResourceFromJid(from),
                     node.value);
                 break;
-            case 'microphoneaccess-broadcast':
-                this.eventEmitter.emit(
-                    XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                    Strophe.getResourceFromJid(from),
-                    node.value);
-                break;
             case 'videoaccess':
                 this.eventEmitter.emit(
                     XMPPEvents.VIDEOACCESS_CHANGED_FOR_PARTICIPANT,
-                    Strophe.getResourceFromJid(from),
-                    node.value);
-                break;
-            case 'videoaccess-broadcast':
-                this.eventEmitter.emit(
-                    XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
                     Strophe.getResourceFromJid(from),
                     node.value);
                 break;
@@ -1247,6 +1251,61 @@ export default class ChatRoom extends Listenable {
             kickIQ,
             result => logger.log('Kick participant with jid: ', jid, result),
             error => logger.log('Kick participant error: ', error));
+    }
+
+    /**
+     * Value for broadcast audio permission
+     * @param iqValue
+     */
+    sendMicrophoneBroadcastPermissionIQ(iqValue) {
+        this.sendBroadcastPermissionIQ('muc#roomconfig_bip_allow_microphone', iqValue);
+    }
+
+    /**
+     * Value for broadcast audio permission
+     * @param iqValue
+     */
+    sendCameraBroadcastPermissionIQ(iqValue) {
+        this.sendBroadcastPermissionIQ('muc#roomconfig_bip_allow_camera', iqValue);
+    }
+
+    /**
+     * Value for broadcast audio permission
+     * @param iqValue
+     */
+    sendBroadcastPermissionIQ(key, iqValue) {
+        const formSubmit
+            = $iq({
+                to: this.roomjid,
+                type: 'set'
+            })
+                .c('query', {
+                    xmlns: 'http://jabber.org/protocol/muc#owner'
+                });
+
+        formSubmit.c('x', {
+            xmlns: 'jabber:x:data',
+            type: 'submit'
+        });
+        formSubmit
+            .c('field', { 'var': 'FORM_TYPE' })
+            .c('value')
+            .t('http://jabber.org/protocol/muc#roomconfig')
+            .up()
+            .up();
+
+        // if members only enabled
+        formSubmit
+            .c('field', { 'var': key })
+            .c('value')
+            .t(iqValue)
+            .up()
+            .up();
+
+        this.connection.sendIQ(
+            formSubmit,
+            result => logger.log('Audio broadcast success: ', result),
+            error => logger.log('Audio broadcast error: ', error));
     }
 
     /* eslint-disable max-params */
