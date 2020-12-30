@@ -2,6 +2,7 @@
 
 const process = require('process');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+const TerserPlugin = require('terser-webpack-plugin');
 
 const analyzeBundle = process.argv.indexOf('--analyze-bundle') !== -1;
 
@@ -11,7 +12,7 @@ const minimize
 
 const config = {
     // The inline-source-map is used to allow debugging the unit tests with Karma
-    devtool: minimize ? 'source-map' : 'inline-source-map',
+    // devtool: minimize ? 'source-map' : 'inline-source-map',
     mode: minimize ? 'production' : 'development',
     module: {
         rules: [ {
@@ -71,7 +72,9 @@ const config = {
         __filename: true
     },
     optimization: {
-        concatenateModules: minimize
+        minimizer: [ new TerserPlugin() ],
+        concatenateModules: minimize,
+        minimize: true
     },
     output: {
         filename: `[name]${minimize ? '.min' : ''}.js`,
@@ -106,13 +109,9 @@ module.exports = [
         entry: {
             worker: './modules/e2ee/Worker.js'
         },
-        mode: 'production',
         output: {
             filename: 'lib-jitsi-meet.e2ee-worker.js',
             path: process.cwd()
-        },
-        optimization: {
-            minimize: false
         }
     }
 ];
