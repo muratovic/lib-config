@@ -1,6 +1,7 @@
 /* global __dirname */
 
 const process = require('process');
+const TerserPlugin = require('terser-webpack-plugin');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 
 const analyzeBundle = process.argv.indexOf('--analyze-bundle') !== -1;
@@ -11,7 +12,7 @@ const minimize
 
 module.exports = {
     // The inline-source-map is used to allow debugging the unit tests with Karma
-    devtool: minimize ? 'source-map' : 'inline-source-map',
+    // devtool: minimize ? 'source-map' : 'inline-source-map',
     mode: minimize ? 'production' : 'development',
     module: {
         rules: [ {
@@ -72,7 +73,9 @@ module.exports = {
         __filename: true
     },
     optimization: {
-        concatenateModules: minimize
+        minimizer: [ new TerserPlugin() ],
+        concatenateModules: minimize,
+        minimize: true
     },
     output: {
         filename: `[name]${minimize ? '.min' : ''}.js`,
