@@ -14,9 +14,8 @@ module.exports = function(config) {
 
         // list of files / patterns to load in the browser
         files: [
-            './doc/example/libs/jquery-2.1.1.js',
+            'https://code.jquery.com/jquery-3.5.1.min.js',
             'node_modules/core-js/index.js',
-            './index.js',
             './modules/**/*.spec.js'
         ],
 
@@ -29,7 +28,6 @@ module.exports = function(config) {
         //  https://npmjs.org/browse/keyword/karma-preprocessor
         preprocessors: {
             'node_modules/core-js/**': [ 'webpack' ],
-            './index.js': [ 'webpack' ],
             './**/*.spec.js': [ 'webpack', 'sourcemap' ]
         },
 
@@ -62,6 +60,6 @@ module.exports = function(config) {
         // if true, Karma captures browsers, runs the tests and exits
         singleRun: true,
 
-        webpack: require('./webpack.config.js')
+        webpack: require('./webpack-shared-config')
     });
 };

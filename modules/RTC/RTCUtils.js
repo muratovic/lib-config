@@ -11,6 +11,7 @@ import { getLogger } from 'jitsi-meet-logger';
 import clonedeep from 'lodash.clonedeep';
 
 import JitsiTrackError from '../../JitsiTrackError';
+import * as JitsiTrackErrors from '../../JitsiTrackErrors';
 import CameraFacingMode from '../../service/RTC/CameraFacingMode';
 import * as MediaType from '../../service/RTC/MediaType';
 import RTCEvents from '../../service/RTC/RTCEvents';
@@ -100,6 +101,13 @@ let availableDevices;
 let availableDevicesPollTimer;
 
 /**
+ * An empty function.
+ */
+function emptyFuncton() {
+    // no-op
+}
+
+/**
  * Initialize wrapper function for enumerating devices.
  * TODO: remove this, it should no longer be needed.
  *
@@ -109,7 +117,15 @@ function initEnumerateDevicesWithCallback() {
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
         return callback => {
             navigator.mediaDevices.enumerateDevices()
-                .then(callback, () => callback([]));
+                .then(devices => {
+                    updateKnownDevices(devices);
+                    callback(devices);
+                })
+                .catch(error => {
+                    logger.warn(`Failed to  enumerate devices. ${error}`);
+                    updateKnownDevices([]);
+                    callback([]);
+                });
         };
     }
 }
@@ -551,7 +567,7 @@ function updateGrantedPermissions(um, stream) {
         grantedPermissions.audio = audioTracksReceived;
     }
 
-    eventEmitter.emit(RTCEvents.GRANTED_PERMISSIONS, grantedPermissions);
+    eventEmitter.emit(RTCEvents.PERMISSIONS_CHANGED, grantedPermissions);
 }
 
 /**
@@ -621,6 +637,23 @@ function sendDeviceListToAnalytics(deviceList) {
     });
 }
 
+
+/**
+ * Update known devices.
+ *
+ * @param {Array<Object>} pds - The new devices.
+ * @returns {void}
+ *
+ * NOTE: Use this function as a shared callback to handle both the devicechange event  and the polling implementations.
+ * This prevents duplication and works around a chrome bug (verified to occur on 68) where devicechange fires twice in
+ * a row, which can cause async post devicechange processing to collide.
+ */
+function updateKnownDevices(pds) {
+    if (compareAvailableMediaDevices(pds)) {
+        onMediaDevicesListChanged(pds);
+    }
+}
+
 /**
  * Event handler for the 'devicechange' event.
  *
@@ -629,16 +662,14 @@ function sendDeviceListToAnalytics(deviceList) {
  */
 function onMediaDevicesListChanged(devicesReceived) {
     availableDevices = devicesReceived.slice(0);
-    logger.info(
-        'list of media devices has changed:',
-        availableDevices);
+    logger.info('list of media devices has changed:', availableDevices);
 
     sendDeviceListToAnalytics(availableDevices);
 
     // Used by tracks to update the real device id before the consumer of lib-jitsi-meet receives the new device list.
-    eventEmitter.emit(RTCEvents.DEVICE_LIST_WILL_CHANGE, devicesReceived);
+    eventEmitter.emit(RTCEvents.DEVICE_LIST_WILL_CHANGE, availableDevices);
 
-    eventEmitter.emit(RTCEvents.DEVICE_LIST_CHANGED, devicesReceived);
+    eventEmitter.emit(RTCEvents.DEVICE_LIST_CHANGED, availableDevices);
 }
 
 /**
@@ -681,6 +712,8 @@ function handleLocalStream(streams, resolution) {
                     videoStream.addTrack(videoTracks[j]);
                 }
             }
+
+            audioVideo.release && audioVideo.release(false);
         } else {
             // On other types of browser (e.g. Firefox) we choose (namely,
             // obtainAudioAndVideoPermissions) to call getUserMedia per device
@@ -723,56 +756,6 @@ function handleLocalStream(streams, resolution) {
     }
 
     return res;
-}
-
-/**
- * Represents a default implementation of setting a <tt>MediaStream</tt> as the
- * source of a video element that tries to be browser-agnostic through feature
- * checking. Note though that it was not completely clear from the predating
- * browser-specific implementations what &quot;videoSrc&quot; was because one
- * implementation of {@link RTCUtils#getVideoSrc} would return
- * <tt>MediaStream</tt> (e.g. Firefox), another a <tt>string</tt> representation
- * of the <tt>URL</tt> of the <tt>MediaStream</tt> (e.g. Chrome) and the return
- * value was only used by {@link RTCUIHelper#getVideoId} which itself did not
- * appear to be used anywhere. Generally, the implementation will try to follow
- * the related standards i.e. work with the <tt>srcObject</tt> and <tt>src</tt>
- * properties of the specified <tt>element</tt> taking into account vender
- * prefixes.
- *
- * @param element the element whose video source/src is to be set to the
- * specified <tt>stream</tt>
- * @param {MediaStream} stream the <tt>MediaStream</tt> to set as the video
- * source/src of <tt>element</tt>
- */
-function defaultSetVideoSrc(element, stream) {
-    // srcObject
-    let srcObjectPropertyName = 'srcObject';
-
-    if (!(srcObjectPropertyName in element)) {
-        srcObjectPropertyName = 'mozSrcObject';
-        if (!(srcObjectPropertyName in element)) {
-            srcObjectPropertyName = null;
-        }
-    }
-    if (srcObjectPropertyName) {
-        element[srcObjectPropertyName] = stream;
-
-        return;
-    }
-
-    // src
-    let src;
-
-    if (stream) {
-        src = stream.jitsiObjectURL;
-
-        // Save the created URL for stream so we can reuse it and not keep
-        // creating URLs.
-        if (!src) {
-            stream.jitsiObjectURL = src = URL.createObjectURL(stream);
-        }
-    }
-    element.src = src || '';
 }
 
 /**
@@ -835,22 +818,13 @@ class RTCUtils extends Listenable {
 
             this.getStreamID = ({ id }) => id;
             this.getTrackID = ({ id }) => id;
-        } else if (browser.isChromiumBased() // this is chrome < 61
-                || browser.isReactNative()) {
-
+        } else if (browser.isReactNative()) {
             this.RTCPeerConnectionType = RTCPeerConnection;
 
-            this.attachMediaStream
-                = wrapAttachMediaStream((element, stream) => {
-                    defaultSetVideoSrc(element, stream);
-
-                    return element;
-                });
+            this.attachMediaStream = undefined; // Unused on React Native.
 
             this.getStreamID = function({ id }) {
-                // A. MediaStreams from FF endpoints have the characters '{' and
-                // '}' that make jQuery choke.
-                // B. The react-native-webrtc implementation that we use at the
+                // The react-native-webrtc implementation that we use at the
                 // time of this writing returns a number for the id of
                 // MediaStream. Let's just say that a number contains no special
                 // characters.
@@ -860,17 +834,6 @@ class RTCUtils extends Listenable {
                         : SDPUtil.filterSpecialChars(id));
             };
             this.getTrackID = ({ id }) => id;
-
-            if (!MediaStream.prototype.getVideoTracks) {
-                MediaStream.prototype.getVideoTracks = function() {
-                    return this.videoTracks;
-                };
-            }
-            if (!MediaStream.prototype.getAudioTracks) {
-                MediaStream.prototype.getAudioTracks = function() {
-                    return this.audioTracks;
-                };
-            }
         } else {
             const message = 'Endpoint does not appear to be WebRTC-capable';
 
@@ -886,7 +849,7 @@ class RTCUtils extends Listenable {
 
         if (this.isDeviceListAvailable()) {
             this.enumerateDevices(ds => {
-                availableDevices = ds.splice(0);
+                availableDevices = ds.slice(0);
 
                 logger.debug('Available devices: ', availableDevices);
                 sendDeviceListToAnalytics(availableDevices);
@@ -895,27 +858,15 @@ class RTCUtils extends Listenable {
                     RTCEvents.DEVICE_LIST_AVAILABLE,
                     availableDevices);
 
-
-                // Use a shared callback to handle both the devicechange event
-                // and the polling implementations. This prevents duplication
-                // and works around a chrome bug (verified to occur on 68) where
-                // devicechange fires twice in a row, which can cause async post
-                // devicechange processing to collide.
-                const updateKnownDevices = () => this.enumerateDevices(pds => {
-                    if (compareAvailableMediaDevices(pds)) {
-                        onMediaDevicesListChanged(pds);
-                    }
-                });
-
                 if (browser.supportsDeviceChangeEvent()) {
                     navigator.mediaDevices.addEventListener(
                         'devicechange',
-                        updateKnownDevices);
+                        () => this.enumerateDevices(emptyFuncton));
                 } else {
                     // Periodically poll enumerateDevices() method to check if
                     // list of media devices has changed.
                     availableDevicesPollTimer = window.setInterval(
-                        updateKnownDevices,
+                        () => this.enumerateDevices(emptyFuncton),
                         AVAILABLE_DEVICES_POLL_INTERVAL_TIME);
                 }
             });
@@ -963,28 +914,20 @@ class RTCUtils extends Listenable {
     * @param {Object} options.frameRate.max - Maximum fps
     * @param {bool}   options.screenShareAudio - Used by electron clients to
     * enable system audio screen sharing.
+    * @param {number} options.timeout - The timeout in ms for GUM.
     * @returns {Promise} Returns a media stream on success or a JitsiTrackError
     * on failure.
     **/
     getUserMediaWithConstraints(um, options = {}) {
-        const constraints = getConstraints(um, options);
+        const {
+            timeout,
+            ...otherOptions
+        } = options;
+        const constraints = getConstraints(um, otherOptions);
 
-        logger.info('Get media constraints', constraints);
+        logger.info('Get media constraints', JSON.stringify(constraints));
 
-        return new Promise((resolve, reject) => {
-            navigator.mediaDevices.getUserMedia(constraints)
-            .then(stream => {
-                logger.log('onUserMediaSuccess');
-                updateGrantedPermissions(um, stream);
-                resolve(stream);
-            })
-            .catch(error => {
-                logger.warn('Failed to get access to local media. '
-                    + ` ${error} ${constraints} `);
-                updateGrantedPermissions(um, undefined);
-                reject(new JitsiTrackError(error, constraints, um));
-            });
-        });
+        return this._getUserMedia(um, constraints, timeout);
     }
 
     /**
@@ -993,21 +936,50 @@ class RTCUtils extends Listenable {
      *
      * @param {array} umDevices which devices to acquire (e.g. audio, video)
      * @param {Object} constraints - Stream specifications to use.
+     * @param {number} timeout - The timeout in ms for GUM.
      * @returns {Promise}
      */
-    _newGetUserMediaWithConstraints(umDevices, constraints = {}) {
+    _getUserMedia(umDevices, constraints = {}, timeout = 0) {
         return new Promise((resolve, reject) => {
+            let gumTimeout, timeoutExpired = false;
+
+            if (typeof timeout === 'number' && !isNaN(timeout) && timeout > 0) {
+                gumTimeout = setTimeout(() => {
+                    timeoutExpired = true;
+                    gumTimeout = undefined;
+                    reject(new JitsiTrackError(JitsiTrackErrors.TIMEOUT));
+                }, timeout);
+            }
+
             navigator.mediaDevices.getUserMedia(constraints)
                 .then(stream => {
                     logger.log('onUserMediaSuccess');
                     updateGrantedPermissions(umDevices, stream);
-                    resolve(stream);
+                    if (!timeoutExpired) {
+                        if (typeof gumTimeout !== 'undefined') {
+                            clearTimeout(gumTimeout);
+                        }
+                        resolve(stream);
+                    }
                 })
                 .catch(error => {
-                    logger.warn('Failed to get access to local media. '
-                        + ` ${error} ${constraints} `);
-                    updateGrantedPermissions(umDevices, undefined);
-                    reject(new JitsiTrackError(error, constraints, umDevices));
+                    logger.warn(`Failed to get access to local media. ${error} ${JSON.stringify(constraints)}`);
+                    const jitsiError = new JitsiTrackError(error, constraints, umDevices);
+
+                    if (!timeoutExpired) {
+                        if (typeof gumTimeout !== 'undefined') {
+                            clearTimeout(gumTimeout);
+                        }
+                        reject(error);
+                    }
+
+                    if (jitsiError.name === JitsiTrackErrors.PERMISSION_DENIED) {
+                        updateGrantedPermissions(umDevices, undefined);
+                    }
+
+                    // else {
+                    // Probably the error is not caused by the lack of permissions and we don't need to update them.
+                    // }
                 });
         });
     }
@@ -1015,7 +987,7 @@ class RTCUtils extends Listenable {
     /**
      * Acquire a display stream via the screenObtainer. This requires extra
      * logic compared to use screenObtainer versus normal device capture logic
-     * in RTCUtils#_newGetUserMediaWithConstraints.
+     * in RTCUtils#_getUserMedia.
      *
      * @param {Object} options
      * @param {string[]} options.desktopSharingSources
@@ -1027,9 +999,8 @@ class RTCUtils extends Listenable {
      * then a rejected promise will be returned.
      */
     _newGetDesktopMedia(options) {
-        if (!screenObtainer.isSupported() || !browser.supportsVideo()) {
-            return Promise.reject(
-                new Error('Desktop sharing is not supported!'));
+        if (!screenObtainer.isSupported()) {
+            return Promise.reject(new Error('Desktop sharing is not supported!'));
         }
 
         return new Promise((resolve, reject) => {
@@ -1217,6 +1188,11 @@ class RTCUtils extends Listenable {
     newObtainAudioAndVideoPermissions(options) {
         logger.info('Using the new gUM flow');
 
+        const {
+            timeout,
+            ...otherOptions
+        } = options;
+
         const mediaStreamsMetaData = [];
 
         // Declare private functions to be used in the promise chain below.
@@ -1230,7 +1206,7 @@ class RTCUtils extends Listenable {
          * @returns {Promise}
          */
         const maybeRequestDesktopDevice = function() {
-            const umDevices = options.devices || [];
+            const umDevices = otherOptions.devices || [];
             const isDesktopDeviceRequested
                 = umDevices.indexOf('desktop') !== -1;
 
@@ -1242,7 +1218,7 @@ class RTCUtils extends Listenable {
                 desktopSharingSourceDevice,
                 desktopSharingSources,
                 desktopSharingFrameRate
-            } = options;
+            } = otherOptions;
 
             // Attempt to use a video input device as a screenshare source if
             // the option is defined.
@@ -1266,7 +1242,7 @@ class RTCUtils extends Listenable {
                 // Leverage the helper used by {@link _newGetDesktopMedia} to
                 // get constraints for the desktop stream.
                 const { gumOptions, trackOptions }
-                    = this._parseDesktopSharingOptions(options);
+                    = this._parseDesktopSharingOptions(otherOptions);
 
                 const constraints = {
                     video: {
@@ -1275,8 +1251,7 @@ class RTCUtils extends Listenable {
                     }
                 };
 
-                return this._newGetUserMediaWithConstraints(
-                    requestedDevices, constraints)
+                return this._getUserMedia(requestedDevices, constraints, timeout)
                     .then(stream => {
                         const track = stream && stream.getTracks()[0];
                         const applyConstrainsPromise
@@ -1352,22 +1327,19 @@ class RTCUtils extends Listenable {
          * @returns {Promise}
          */
         const maybeRequestCaptureDevices = function() {
-            const umDevices = options.devices || [ 'audio', 'video' ];
-            const requestedCaptureDevices = umDevices.filter(device =>
-                device === 'audio'
-                || (device === 'video' && browser.supportsVideo()));
+            const umDevices = otherOptions.devices || [ 'audio', 'video' ];
+            const requestedCaptureDevices = umDevices.filter(device => device === 'audio' || device === 'video');
 
             if (!requestedCaptureDevices.length) {
                 return Promise.resolve();
             }
 
             const constraints = newGetConstraints(
-                requestedCaptureDevices, options);
+                requestedCaptureDevices, otherOptions);
 
-            logger.info('Got media constraints: ', constraints);
+            logger.info('Got media constraints: ', JSON.stringify(constraints));
 
-            return this._newGetUserMediaWithConstraints(
-                requestedCaptureDevices, constraints);
+            return this._getUserMedia(requestedCaptureDevices, constraints, timeout);
         }.bind(this);
 
         /**
@@ -1392,7 +1364,7 @@ class RTCUtils extends Listenable {
                 mediaStreamsMetaData.push({
                     stream: audioStream,
                     track: audioStream.getAudioTracks()[0],
-                    effects: options.effects
+                    effects: otherOptions.effects
                 });
             }
 
@@ -1405,7 +1377,7 @@ class RTCUtils extends Listenable {
                     stream: videoStream,
                     track: videoStream.getVideoTracks()[0],
                     videoType: VideoType.CAMERA,
-                    effects: options.effects
+                    effects: otherOptions.effects
                 });
             }
         };
@@ -1476,14 +1448,6 @@ class RTCUtils extends Listenable {
         if (mediaStream.release) {
             mediaStream.release();
         }
-
-        // if we have done createObjectURL, lets clean it
-        const url = mediaStream.jitsiObjectURL;
-
-        if (url) {
-            delete mediaStream.jitsiObjectURL;
-            URL.revokeObjectURL(url);
-        }
     }
 
     /**
@@ -1536,6 +1500,14 @@ class RTCUtils extends Listenable {
      */
     getCurrentlyAvailableMediaDevices() {
         return availableDevices;
+    }
+
+    /**
+     * Returns whether available devices have permissions granted
+     * @returns {Boolean}
+     */
+    arePermissionsGrantedForAvailableDevices() {
+        return availableDevices.some(device => Boolean(device.label));
     }
 
     /**
