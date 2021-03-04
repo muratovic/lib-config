@@ -860,8 +860,7 @@ JitsiConference.prototype.sendPrivateTextMessage = function(
  **/
 JitsiConference.prototype.sendCommand = function(name, values) {
     if (this.room) {
-        this.room.addToPresence(name, values);
-        this.room.sendPresence();
+        this.room.addOrReplaceInPresence(name, values) && this.room.sendPresence();
     } else {
         logger.warn('Not sending a command, room not initialized.');
     }
@@ -894,11 +893,10 @@ JitsiConference.prototype.removeCommand = function(name) {
  */
 JitsiConference.prototype.setDisplayName = function(name) {
     if (this.room) {
-        this.room.addToPresence('nick', {
+        this.room.addOrReplaceInPresence('nick', {
             attributes: { xmlns: 'http://jabber.org/protocol/nick' },
             value: name
-        });
-        this.room.sendPresence();
+        }) && this.room.sendPresence();
     }
 };
 
@@ -1151,7 +1149,6 @@ JitsiConference.prototype._setupNewTrack = function(newTrack) {
         }
     }
     if (newTrack.isVideoTrack()) {
-        this.removeCommand('videoType');
         this.sendCommand('videoType', {
             value: newTrack.videoType,
             attributes: {
@@ -2363,14 +2360,13 @@ JitsiConference.prototype.setStartMutedPolicy = function(policy) {
         return;
     }
     this.startMutedPolicy = policy;
-    this.room.addToPresence('startmuted', {
+    this.room.addOrReplaceInPresence('startmuted', {
         attributes: {
             audio: policy.audio,
             video: policy.video,
             xmlns: 'http://jitsi.org/jitmeet/start-muted'
         }
-    });
-    this.room.sendPresence();
+    }) && this.room.sendPresence();
 };
 
 /**
