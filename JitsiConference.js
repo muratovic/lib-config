@@ -38,12 +38,15 @@ import SpeakerStatsCollector from './modules/statistics/SpeakerStatsCollector';
 import Statistics from './modules/statistics/statistics';
 import Transcriber from './modules/transcription/transcriber';
 import GlobalOnErrorHandler from './modules/util/GlobalOnErrorHandler';
-import { hashString } from './modules/util/MathUtil';
 import RandomUtil from './modules/util/RandomUtil';
 import ComponentsVersions from './modules/version/ComponentsVersions';
 import VideoSIPGW from './modules/videosipgw/VideoSIPGW';
 import * as VideoSIPGWConstants from './modules/videosipgw/VideoSIPGWConstants';
-import { JITSI_MEET_MUC_TYPE } from './modules/xmpp/xmpp';
+import {
+    FEATURE_E2EE,
+    FEATURE_JIGASI,
+    JITSI_MEET_MUC_TYPE
+} from './modules/xmpp/xmpp';
 import * as MediaType from './service/RTC/MediaType';
 import VideoType from './service/RTC/VideoType';
 import {
@@ -100,10 +103,6 @@ const JINGLE_SI_TIMEOUT = 5000;
  * "Math.random() < forceJVB121Ratio" will determine whether a 2 people
  * conference should be moved to the JVB instead of P2P. The decision is made on
  * the responder side, after ICE succeeds on the P2P connection.
- * @param {*} [options.config.openBridgeChannel] Which kind of communication to
- * open with the videobridge. Values can be "datachannel", "websocket", true
- * (treat it as "datachannel"), undefined (treat it as "datachannel") and false
- * (don't open any channel).
  * @constructor
  *
  * FIXME Make all methods which are called from lib-internal classes
@@ -375,11 +374,11 @@ JitsiConference.prototype._init = function(options = {}) {
             });
     this.participantConnectionStatus.init();
 
-    // Add the ability to enable callStats only on a percentage of conferences based on config.js settings.
+    // Add the ability to enable callStats only on a percentage of users based on config.js settings.
     let enableCallStats = true;
 
     if (config.testing && config.testing.callStatsThreshold) {
-        enableCallStats = (hashString(this.options.name) % 100) < config.testing.callStatsThreshold;
+        enableCallStats = (Math.random() * 100) <= config.testing.callStatsThreshold;
     }
 
     if (!this.statistics) {
@@ -1520,9 +1519,11 @@ JitsiConference.prototype.muteParticipant = function(id) {
  * @param status the initial status if any
  * @param identity the member identity, if any
  * @param botType the member botType, if any
+ * @param fullJid the member full jid, if any
+ * @param features the member botType, if any
  */
 JitsiConference.prototype.onMemberJoined = function(
-        jid, nick, role, isHidden, statsID, status, identity, botType) {
+        jid, nick, role, isHidden, statsID, status, identity, botType, fullJid, features) {
     const id = Strophe.getResourceFromJid(jid);
 
     if (id === 'focus' || this.myUserId() === id) {
@@ -1534,6 +1535,8 @@ JitsiConference.prototype.onMemberJoined = function(
 
     participant._role = role;
     participant._botType = botType;
+    participant._features = features || new Set();
+
     this.participants[id] = participant;
     this.eventEmitter.emit(
         JitsiConferenceEvents.USER_JOINED,
@@ -1542,11 +1545,26 @@ JitsiConference.prototype.onMemberJoined = function(
 
     this._updateFeatures(participant);
 
-    this._maybeStartOrStopP2P();
+    // maybeStart only if we had finished joining as then we will have information for the number of participants
+    if (this.isJoined()) {
+        this._maybeStartOrStopP2P();
+    }
+
     this._maybeSetSITimeout();
 };
 
 /* eslint-enable max-params */
+
+/**
+ * Get notified when we joined the room.
+ *
+ * FIXME This should NOT be exposed!
+ *
+ * @private
+ */
+JitsiConference.prototype._onMucJoined = function() {
+    this._maybeStartOrStopP2P();
+};
 
 /**
  * Updates features for a participant.
@@ -1560,11 +1578,11 @@ JitsiConference.prototype._updateFeatures = function(participant) {
             participant._supportsDTMF = features.has('urn:xmpp:jingle:dtmf:0');
             this.updateDTMFSupport();
 
-            if (features.has('http://jitsi.org/protocol/jigasi')) {
+            if (features.has(FEATURE_JIGASI)) {
                 participant.setProperty('features_jigasi', true);
             }
 
-            if (features.has('https://jitsi.org/meet/e2ee')) {
+            if (features.has(FEATURE_E2EE)) {
                 participant.setProperty('features_e2ee', true);
             }
         })
@@ -1935,6 +1953,9 @@ JitsiConference.prototype._acceptJvbIncomingCall = function(
         });
     } catch (error) {
         GlobalOnErrorHandler.callErrorHandler(error);
+        logger.error(error);
+
+        return;
     }
 
     // Open a channel with the videobridge.
@@ -2006,23 +2027,12 @@ JitsiConference.prototype._setBridgeChannel = function(offerIq, pc) {
         wsUrl = webSocket[0].getAttribute('url');
     }
 
-    let bridgeChannelType;
-
-    switch (this.options.config.openBridgeChannel) {
-    case 'datachannel':
-    case true:
-    case undefined:
-        bridgeChannelType = 'datachannel';
-        break;
-    case 'websocket':
-        bridgeChannelType = 'websocket';
-        break;
-    }
-
-    if (bridgeChannelType === 'datachannel') {
-        this.rtc.initializeBridgeChannel(pc, null);
-    } else if (bridgeChannelType === 'websocket' && wsUrl) {
+    if (wsUrl) {
+        // If the offer contains a websocket use it.
         this.rtc.initializeBridgeChannel(null, wsUrl);
+    } else {
+        // Otherwise, fall back to an attempt to use SCTP.
+        this.rtc.initializeBridgeChannel(pc, null);
     }
 };
 
@@ -2428,6 +2438,15 @@ JitsiConference.prototype.isCallstatsEnabled = function() {
     return this.statistics.isCallstatsEnabled();
 };
 
+/**
+ * Finds the SSRC of a given track
+ *
+ * @param track
+ * @returns {number|undefined} the SSRC of the specificed track, otherwise undefined.
+ */
+JitsiConference.prototype.getSsrcByTrack = function(track) {
+    return track.isLocal() ? this.getActivePeerConnection()?.getLocalSSRC(track) : track.getSSRC();
+};
 
 /**
  * Handles track attached to container (Calls associateStreamWithVideoTag method
@@ -2446,7 +2465,7 @@ JitsiConference.prototype._onTrackAttach = function(track, container) {
             : this.jvbJingleSession && this.jvbJingleSession.peerconnection;
 
     if (isLocal) {
-        // Local tracks have SSRC stored on per peer connection basis
+        // Local tracks have SSRC stored on per peer connection basis.
         if (peerConnection) {
             ssrc = peerConnection.getLocalSSRC(track);
         }
@@ -2854,8 +2873,7 @@ JitsiConference.prototype._updateProperties = function(properties = {}) {
             'bridge-count',
 
             // The conference creation time (set by jicofo).
-            'created-ms',
-            'octo-enabled'
+            'created-ms'
         ];
 
         analyticsKeys.forEach(key => {
@@ -3160,7 +3178,7 @@ JitsiConference.prototype._maybeStartOrStopP2P = function(userLeftEvent) {
 JitsiConference.prototype._shouldBeInP2PMode = function() {
     const peers = this.getParticipants();
     const peerCount = peers.length;
-    const hasBotPeer = peers.find(p => p._botType === 'poltergeist') !== undefined;
+    const hasBotPeer = peers.find(p => p._botType === 'poltergeist' || p._features.has(FEATURE_JIGASI)) !== undefined;
     const shouldBeInP2P = peerCount === 1 && !hasBotPeer;
 
     logger.debug(`P2P? peerCount: ${peerCount}, hasBotPeer: ${hasBotPeer} => ${shouldBeInP2P}`);

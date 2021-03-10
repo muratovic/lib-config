@@ -45,11 +45,13 @@ export default class XmppConnection extends Listenable {
      * default with jitter. Pass -1 to disable. The actual interval equation is:
      * jitterDelay = (interval * 0.2) + (0.8 * interval * Math.random())
      * The keep alive is HTTP GET request to the {@link options.serviceUrl}.
+     * @param {Object} [options.xmppPing] - The xmpp ping settings.
      */
-    constructor({ enableWebsocketResume, websocketKeepAlive, serviceUrl }) {
+    constructor({ enableWebsocketResume, websocketKeepAlive, serviceUrl, xmppPing }) {
         super();
         this._options = {
             enableWebsocketResume: typeof enableWebsocketResume === 'undefined' ? true : enableWebsocketResume,
+            pingOptions: xmppPing,
             websocketKeepAlive: typeof websocketKeepAlive === 'undefined' ? 4 * 60 * 1000 : Number(websocketKeepAlive)
         };
 
@@ -83,7 +85,9 @@ export default class XmppConnection extends Listenable {
         this.addConnectionPlugin(
             'ping',
             new PingConnectionPlugin({
-                onPingThresholdExceeded: () => this._onPingErrorThresholdExceeded()
+                getTimeSinceLastServerResponse: () => this.getTimeSinceLastSuccess(),
+                onPingThresholdExceeded: () => this._onPingErrorThresholdExceeded(),
+                pingOptions: xmppPing
             }));
     }
 
@@ -172,6 +176,13 @@ export default class XmppConnection extends Listenable {
     }
 
     /**
+     * A getter for the domain to be used for ping.
+     */
+    get pingDomain() {
+        return this._options.pingOptions?.domain || this.domain;
+    }
+
+    /**
      * A getter for the service URL.
      *
      * @returns {string}
@@ -252,7 +263,7 @@ export default class XmppConnection extends Listenable {
             this._maybeStartWSKeepAlive();
             this._processDeferredIQs();
             this._resumeTask.cancel();
-            this.ping.startInterval(this.domain);
+            this.ping.startInterval(this._options.pingOptions?.domain || this.domain);
         } else if (status === Strophe.Status.DISCONNECTED) {
             this.ping.stopInterval();
 

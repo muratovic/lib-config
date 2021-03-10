@@ -32,9 +32,10 @@ const logger = getLogger(__filename);
  * @param {string} options.serviceUrl - The service URL for XMPP connection.
  * @param {string} options.enableWebsocketResume - True to enable stream resumption.
  * @param {number} [options.websocketKeepAlive] - See {@link XmppConnection} constructor.
+ * @param {Object} [options.xmppPing] - See {@link XmppConnection} constructor.
  * @returns {XmppConnection}
  */
-function createConnection({ enableWebsocketResume, serviceUrl = '/http-bind', token, websocketKeepAlive }) {
+function createConnection({ enableWebsocketResume, serviceUrl = '/http-bind', token, websocketKeepAlive, xmppPing }) {
     // Append token as URL param
     if (token) {
         // eslint-disable-next-line no-param-reassign
@@ -44,7 +45,8 @@ function createConnection({ enableWebsocketResume, serviceUrl = '/http-bind', to
     return new XmppConnection({
         enableWebsocketResume,
         serviceUrl,
-        websocketKeepAlive
+        websocketKeepAlive,
+        xmppPing
     });
 }
 
@@ -64,9 +66,7 @@ function initStropheNativePlugins() {
  * A list of ice servers to use by default for P2P.
  */
 export const DEFAULT_STUN_SERVERS = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
+    { urls: 'stun:meet-jit-si-turnrelay.jitsi.net:443' }
 ];
 
 /**
@@ -76,6 +76,19 @@ export const DEFAULT_STUN_SERVERS = [
  * the JSON has this key, then it is a valid json-message to be sent.
  */
 export const JITSI_MEET_MUC_TYPE = 'type';
+
+/**
+ * The feature used by jigasi participants.
+ * @type {string}
+ */
+export const FEATURE_JIGASI = 'http://jitsi.org/protocol/jigasi';
+
+/**
+ * The feature used by the lib to mark support for e2ee. We use the feature by putting it in the presence
+ * to avoid additional signaling (disco-info).
+ * @type {string}
+ */
+export const FEATURE_E2EE = 'https://jitsi.org/meet/e2ee';
 
 /**
  *
@@ -91,6 +104,7 @@ export default class XMPP extends Listenable {
      * module try to resume the session in case the Websocket connection breaks.
      * @param {number} [options.websocketKeepAlive] - The websocket keep alive interval. See {@link XmppConnection}
      * constructor for more details.
+     * @param {Object} [options.xmppPing] - The xmpp ping settings.
      * @param {Array<Object>} options.p2pStunServers see {@link JingleConnectionPlugin} for more details.
      * @param token
      */
@@ -105,13 +119,19 @@ export default class XMPP extends Listenable {
 
         initStropheNativePlugins();
 
+        const xmppPing = options.xmppPing || {};
+
+        // let's ping the main domain (in case a guest one is used for the connection)
+        xmppPing.domain = options.hosts.domain;
+
         this.connection = createConnection({
             enableWebsocketResume: options.enableWebsocketResume,
 
             // FIXME remove deprecated bosh option at some point
             serviceUrl: options.serviceUrl || options.bosh,
             token,
-            websocketKeepAlive: options.websocketKeepAlive
+            websocketKeepAlive: options.websocketKeepAlive,
+            xmppPing
         });
 
         this._initStrophePlugins();
@@ -148,11 +168,19 @@ export default class XMPP extends Listenable {
         this.caps.addFeature('urn:xmpp:jingle:apps:rtp:audio');
         this.caps.addFeature('urn:xmpp:jingle:apps:rtp:video');
 
-        if (!this.options.disableRtx) {
+        // Disable RTX on Firefox because of https://bugzilla.mozilla.org/show_bug.cgi?id=1668028.
+        if (!(this.options.disableRtx || browser.isFirefox())) {
             this.caps.addFeature('urn:ietf:rfc:4588');
         }
         if (this.options.enableOpusRed === true && browser.supportsAudioRed()) {
             this.caps.addFeature('http://jitsi.org/opus-red');
+        }
+
+        if (typeof this.options.enableRemb === 'undefined' || this.options.enableRemb) {
+            this.caps.addFeature('http://jitsi.org/remb');
+        }
+        if (typeof this.options.enableTcc === 'undefined' || this.options.enableTcc) {
+            this.caps.addFeature('http://jitsi.org/tcc');
         }
 
         // this is dealt with by SDP O/A so we don't need to announce this
@@ -177,7 +205,7 @@ export default class XMPP extends Listenable {
         }
 
         if (E2EEncryption.isSupported(this.options)) {
-            this.caps.addFeature('https://jitsi.org/meet/e2ee');
+            this.caps.addFeature(FEATURE_E2EE, false, true);
         }
     }
 
@@ -209,27 +237,20 @@ export default class XMPP extends Listenable {
             now);
 
         this.eventEmitter.emit(XMPPEvents.CONNECTION_STATUS_CHANGED, credentials, status, msg);
-        if (status === Strophe.Status.CONNECTED
-            || status === Strophe.Status.ATTACHED) {
-            if (this.options.useStunTurn
-                || (this.options.p2p && this.options.p2p.useStunTurn)) {
-                this.connection.jingle.getStunAndTurnCredentials();
-            }
+        if (status === Strophe.Status.CONNECTED || status === Strophe.Status.ATTACHED) {
+            this.connection.jingle.getStunAndTurnCredentials();
 
             logger.info(`My Jabber ID: ${this.connection.jid}`);
 
             // XmppConnection emits CONNECTED again on reconnect - a good opportunity to clear any "last error" flags
             this._resetState();
 
-            // Schedule ping ?
-            const pingJid = this.connection.domain;
-
             // FIXME no need to do it again on stream resume
-            this.caps.getFeaturesAndIdentities(pingJid)
+            this.caps.getFeaturesAndIdentities(this.options.hosts.domain)
                 .then(({ features, identities }) => {
                     if (!features.has(Strophe.NS.PING)) {
-                        logger.error(
-                            `Ping NOT supported by ${pingJid} - please enable ping in your XMPP server config`);
+                        logger.error(`Ping NOT supported by ${
+                            this.options.hosts.domain} - please enable ping in your XMPP server config`);
                     }
 
                     // check for speakerstats
@@ -532,8 +553,7 @@ export default class XMPP extends Listenable {
      */
     ping(timeout) {
         return new Promise((resolve, reject) => {
-            this.connection.ping
-                    .ping(this.connection.domain, resolve, reject, timeout);
+            this.connection.ping.ping(this.connection.pingDomain, resolve, reject, timeout);
         });
     }
 

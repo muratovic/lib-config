@@ -305,7 +305,7 @@ export default class JingleConnectionPlugin extends ConnectionPlugin {
         //      https://code.google.com/p/webrtc/issues/detail?id=1650
         this.connection.sendIQ(
             $iq({ type: 'get',
-                to: this.connection.domain })
+                to: this.xmpp.options.hosts.domain })
                 .c('services', { xmlns: 'urn:xmpp:extdisco:1' }),
             res => {
                 const iceservers = [];
@@ -375,23 +375,17 @@ export default class JingleConnectionPlugin extends ConnectionPlugin {
                     iceservers[j] = temp;
                 }
 
-                if (options.useStunTurn) {
-                    let filter;
+                let filter;
 
-                    if (options.useTurnUdp) {
-                        filter = s => s.urls.startsWith('turn');
-                    } else {
-                        // By default we filter out STUN and TURN/UDP and leave only TURN/TCP.
-                        filter = s => s.urls.startsWith('turn') && (s.urls.indexOf('transport=tcp') >= 0);
-                    }
-
-                    this.jvbIceConfig.iceServers = iceservers.filter(filter);
+                if (options.useTurnUdp) {
+                    filter = s => s.urls.startsWith('turn');
+                } else {
+                    // By default we filter out STUN and TURN/UDP and leave only TURN/TCP.
+                    filter = s => s.urls.startsWith('turn') && (s.urls.indexOf('transport=tcp') >= 0);
                 }
 
-                if (options.p2p && options.p2p.useStunTurn) {
-                    this.p2pIceConfig.iceServers = iceservers;
-                }
-
+                this.jvbIceConfig.iceServers = iceservers.filter(filter);
+                this.p2pIceConfig.iceServers = iceservers;
             }, err => {
                 logger.warn('getting turn credentials failed', err);
                 logger.warn('is mod_turncredentials or similar installed?');

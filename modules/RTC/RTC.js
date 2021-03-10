@@ -349,6 +349,7 @@ export default class RTC extends Listenable {
      * @private
      */
     _senderVideoConstraintsChanged(senderVideoConstraints) {
+        logger.info('Remote max frame height received on bridge channel: ', JSON.stringify(senderVideoConstraints));
         this._senderVideoConstraints = senderVideoConstraints;
         this.eventEmitter.emit(RTCEvents.SENDER_VIDEO_CONSTRAINTS_CHANGED);
     }
@@ -523,6 +524,10 @@ export default class RTC extends Listenable {
 
         if (browser.supportsSdpSemantics()) {
             iceConfig.sdpSemantics = 'plan-b';
+        }
+
+        if (options.forceTurnRelay) {
+            iceConfig.iceTransportPolicy = 'relay';
         }
 
         // Set the RTCBundlePolicy to max-bundle so that only one set of ice candidates is generated.
@@ -752,7 +757,7 @@ export default class RTC extends Listenable {
     }
 
     /**
-     * Returns true if retrieving the the list of input devices is supported
+     * Returns true if retrieving the list of input devices is supported
      * and false if not.
      */
     static isDeviceListAvailable() {
