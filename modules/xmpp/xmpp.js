@@ -800,8 +800,15 @@ export default class XMPP extends Listenable {
         if (parsedJson
             && parsedJson[JITSI_MEET_MUC_TYPE] === 'conference_duration'
             && parsedJson.created_timestamp) {
+            const conferenceDurationObj = {
+                createdTimeStamp: parsedJson.created_timestamp,
+                elapsedTime: parsedJson.elapsed_time,
+                maxDuration: parsedJson.max_duration,
+                terminationNotificationTime: parsedJson.termination_notification_time
+            };
+
             this.eventEmitter.emit(
-                XMPPEvents.CONFERENCE_TIMESTAMP_RECEIVED, parsedJson.created_timestamp);
+                XMPPEvents.CONFERENCE_TIMESTAMP_RECEIVED, conferenceDurationObj);
         }
 
         return true;
