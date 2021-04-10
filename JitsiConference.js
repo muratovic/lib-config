@@ -2001,9 +2001,7 @@ JitsiConference.prototype._acceptJvbIncomingCall = function(
             this.jvbJingleSession.peerconnection,
             'jitsi' /* Remote user ID for JVB is 'jitsi' */);
 
-        if (this.options.config.statsInfoEnabled) {
-            this.statistics.startRemoteStats(this.jvbJingleSession.peerconnection);
-        }
+        this.statistics.startRemoteStats(this.jvbJingleSession.peerconnection);
     } catch (e) {
         GlobalOnErrorHandler.callErrorHandler(e);
         logger.error(e);
@@ -2840,9 +2838,7 @@ JitsiConference.prototype._onIceConnectionEstablished = function(
     }
 
     logger.info('Starting remote stats with p2p connection');
-    if (this.options.config.statsInfoEnabled) {
-        this.statistics.startRemoteStats(this.p2pJingleSession.peerconnection);
-    }
+    this.statistics.startRemoteStats(this.p2pJingleSession.peerconnection);
 
     Statistics.sendAnalyticsAndLog(
         createP2PEvent(
