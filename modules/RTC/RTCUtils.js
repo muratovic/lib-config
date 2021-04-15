@@ -338,9 +338,7 @@ function getConstraints(um, options = {}) {
             // which, in the case a users has multiple monitors, leads to them being shared all
             // at once. However we tested with chromeMediaSourceId present and it seems to be
             // working properly and also takes care of the previously mentioned issue.
-            constraints.audio = { mandatory: {
-                chromeMediaSource: constraints.video.mandatory.chromeMediaSource
-            } };
+            constraints.audio = { echoCancellation: true };
         }
     }
 
@@ -921,18 +919,13 @@ class RTCUtils extends Listenable {
 
         return new Promise((resolve, reject) => {
             const audioConstraints = {
-                audio: {
-                    ...constraints.audio,
-                    echoCancellation: true, // new style
-                    optional: [
-                        ...constraints.audio.optional,
-                        { echoCancellation: true } // old style
-                    ]
-                }
+                audio: constraints.audio
             };
 
-            const videoConstraints = { audio: false,
-                video: constraints.video };
+            const videoConstraints = {
+                audio: false,
+                video: constraints.video
+            };
 
             Promise.all([
                 navigator.mediaDevices.getUserMedia(audioConstraints),
