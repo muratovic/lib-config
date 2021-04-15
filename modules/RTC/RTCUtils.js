@@ -920,7 +920,17 @@ class RTCUtils extends Listenable {
         logger.info('Get media constraints', JSON.stringify(constraints));
 
         return new Promise((resolve, reject) => {
-            const audioConstraints = { audio: { echoCancellation: true } };
+            const audioConstraints = {
+                audio: {
+                    ...constraints.audio,
+                    echoCancellation: true, // new style
+                    optional: [
+                        ...constraints.audio.optional,
+                        { echoCancellation: true } // old style
+                    ]
+                }
+            };
+
             const videoConstraints = { audio: false,
                 video: constraints.video };
 
