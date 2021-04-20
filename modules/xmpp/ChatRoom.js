@@ -316,18 +316,20 @@ export default class ChatRoom extends Listenable {
             const roomHasMicrophoneBroadcastPermissionValue
                     = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_microphone"]>value');
 
-            if (roomHasMicrophoneBroadcastPermissionValue.length) {
-                this.eventEmitter.emit(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                    roomHasMicrophoneBroadcastPermissionValue.text());
-            }
+            this.eventEmitter.emit(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                roomHasMicrophoneBroadcastPermissionValue.text());
 
             const roomHasCameraBroadcastPermissionValue
                     = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_camera"]>value');
 
-            if (roomHasCameraBroadcastPermissionValue.length) {
-                this.eventEmitter.emit(XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                    roomHasCameraBroadcastPermissionValue.text());
-            }
+            this.eventEmitter.emit(XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                roomHasCameraBroadcastPermissionValue.text());
+
+            const roomHasRaiseHandBroadcastPermissionValue
+                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_raise_hand"]>value');
+
+            this.eventEmitter.emit(XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                roomHasRaiseHandBroadcastPermissionValue.text());
 
             if (locked && specialRoom && roomOwner) {
                 const roomSecretValue
@@ -709,12 +711,6 @@ export default class ChatRoom extends Listenable {
             const node = nodes[i];
 
             switch (node.tagName) {
-            case 'raise-hand-access':
-                this.eventEmitter.emit(
-                    XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_PARTICIPANT,
-                    Strophe.getResourceFromJid(from),
-                    node.value);
-                break;
             case 'screen-share-access':
                 this.eventEmitter.emit(
                     XMPPEvents.SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT,
@@ -1287,6 +1283,14 @@ export default class ChatRoom extends Listenable {
      */
     sendCameraBroadcastPermissionIQ(iqValue) {
         this.sendBroadcastPermissionIQ('muc#roomconfig_bip_allow_camera', iqValue);
+    }
+
+    /**
+     * Value for broadcast raising hand permission
+     * @param iqValue
+     */
+    sendRaiseHandBroadcastPermissionIQ(iqValue) {
+        this.sendBroadcastPermissionIQ('muc#roomconfig_bip_allow_raise_hand', iqValue);
     }
 
     /**
