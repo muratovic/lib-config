@@ -266,6 +266,7 @@ export default class XmppConnection extends Listenable {
             this.ping.startInterval(this._options.pingOptions?.domain || this.domain);
         } else if (status === Strophe.Status.DISCONNECTED) {
             this.ping.stopInterval();
+            targetCallback(status, ...args);
 
             // FIXME add RECONNECTING state instead of blocking the DISCONNECTED update
             blockCallback = this._tryResumingConnection();
