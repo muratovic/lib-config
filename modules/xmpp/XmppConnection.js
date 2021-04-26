@@ -2,6 +2,7 @@ import { getLogger } from 'jitsi-meet-logger';
 import { $pres, Strophe } from 'strophe.js';
 import 'strophejs-plugin-stream-management';
 
+import networkInfo from '../connectivity/NetworkInfo';
 import Listenable from '../util/Listenable';
 
 import ResumeTask from './ResumeTask';
@@ -565,7 +566,7 @@ export default class XmppConnection extends Listenable {
         if (resumeToken) {
             this._resumeTask.schedule();
 
-            return true;
+            return networkInfo.isOnline();
         }
 
         return false;
