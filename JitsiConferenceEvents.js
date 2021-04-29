@@ -82,11 +82,6 @@ export const VIDEOACCESS_CHANGED_FOR_PARTICIPANT = 'conference.videoAccessChange
 export const VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS = 'conference.videoAccessChangedForAllParticipants';
 
 /**
- * Raise hande access has been changed for all participants.
- */
-export const RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS = 'conference.raiseHandAccessChangedForAllParticipants';
-
-/**
  * Microphone access has been changed for participant.
  */
 export const MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.microphoneAccessChangedForParticipant';
@@ -100,6 +95,11 @@ export const MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS = 'conference.microp
  * Screen share access has been changed for participant.
  */
 export const SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.screenShareAccessChangedForParticipant';
+
+/**
+ * Raise hand access has been changed for participant.
+ */
+export const RAISE_HAND_ACCESS_CHANGED_FOR_PARTICIPANT = 'conference.raiseHandAccessChangedForParticipant';
 
 /**
  * The dominant speaker was changed.

@@ -70,11 +70,6 @@ const XMPPEvents = {
     VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS: 'xmpp.videoaccess_changed_for_all_participants',
 
     /**
-     * Videoaccess prop has been changed for participant.
-     */
-    RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS: 'xmpp.raisehand_access_changed_for_all_participants',
-
-    /**
      * Microphone prop has been changed for participant.
      */
     MICROPHONE_ACCESS_CHANGED_FOR_PARTICIPANT: 'xmpp.microphone_access_changed_for_participant',
@@ -88,6 +83,11 @@ const XMPPEvents = {
      * Screen share prop has been changed for participant.
      */
     SCREEN_SHARING_ACCESS_CHANGED_FOR_PARTICIPANT: 'xmpp.screen_sharing_access_changed_for_participant',
+
+    /**
+     * Raise hand prop has been changed for participant.
+     */
+    RAISE_HAND_ACCESS_CHANGED_FOR_PARTICIPANT: 'xmpp.raise_hand_access_changed_for_participant',
 
     /**
      * Chat room instance have been added to Strophe.emuc plugin.
