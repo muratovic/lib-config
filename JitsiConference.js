@@ -1917,13 +1917,7 @@ JitsiConference.prototype._onIncomingCallP2P = function(
 
     let rejectReason;
 
-    if (!browser.supportsP2P()) {
-        rejectReason = {
-            reason: 'unsupported-applications',
-            reasonDescription: 'P2P not supported',
-            errorMsg: 'This client does not support P2P connections'
-        };
-    } else if (!this.isP2PEnabled() && !this.isP2PTestModeEnabled()) {
+    if (!this.isP2PEnabled() && !this.isP2PTestModeEnabled()) {
         rejectReason = {
             reason: 'decline',
             reasonDescription: 'P2P disabled',
@@ -3185,9 +3179,7 @@ JitsiConference.prototype._suspendMediaTransferForJvbConnection = function() {
  * @private
  */
 JitsiConference.prototype._maybeStartOrStopP2P = function(userLeftEvent) {
-    if (!browser.supportsP2P()
-        || !this.isP2PEnabled()
-        || this.isP2PTestModeEnabled()) {
+    if (!this.isP2PEnabled() || this.isP2PTestModeEnabled()) {
         logger.info('Auto P2P disabled');
 
         return;
