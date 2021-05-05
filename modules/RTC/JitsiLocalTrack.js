@@ -352,7 +352,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
             this._streamEffect.stopEffect();
             this._setStream(this._originalStream);
             this._originalStream = null;
-            this.track = this.stream.getTracks()[0];
+            this.track = this.stream ? this.stream.getTracks()[0] : null;
         }
     }
 
@@ -510,7 +510,13 @@ export default class JitsiLocalTrack extends JitsiTrack {
                 || this.videoType === VideoType.DESKTOP
                 || !browser.doesVideoMuteByStreamRemove()) {
             logMuteInfo();
-            if (this.track) {
+
+            // If we have a stream effect that implements its own mute functionality, prioritize it before
+            // normal mute e.g. the stream effect that implements system audio sharing has a custom
+            // mute state in which if the user mutes, system audio still has to go through.
+            if (this._streamEffect && this._streamEffect.setMuted) {
+                this._streamEffect.setMuted(muted);
+            } else if (this.track) {
                 this.track.enabled = !muted;
             }
         } else if (muted) {
@@ -675,12 +681,16 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * @returns {Promise}
      */
     dispose() {
-        this._switchStreamEffect();
-
         let promise = Promise.resolve();
 
+        // Remove the effect instead of stopping it so that the original stream is restored
+        // on both the local track and on the peerconnection.
+        if (this._streamEffect) {
+            promise = this.setEffect();
+        }
+
         if (this.conference) {
-            promise = this.conference.removeTrack(this);
+            promise = promise.then(() => this.conference.removeTrack(this));
         }
 
         if (this.stream) {
@@ -712,6 +722,11 @@ export default class JitsiLocalTrack extends JitsiTrack {
         }
         if (this.isVideoTrack() && !this.isActive()) {
             return true;
+        }
+
+        // If currently used stream effect has its own muted state, use that.
+        if (this._streamEffect && this._streamEffect.isMuted) {
+            return this._streamEffect.isMuted();
         }
 
         return !this.track || !this.track.enabled;
