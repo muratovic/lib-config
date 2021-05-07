@@ -1048,12 +1048,12 @@ StatsCollector.prototype._calculateBitrate = function(now, before, fieldName) {
     const bytesBefore = this.getNonNegativeValue(before[fieldName]);
     const bytesProcessed = Math.max(0, bytesNow - bytesBefore);
 
-    const timeMs = now.timestamp - before.timestamp;
+    const timeMs = (now.timestamp - before.timestamp) / 1000;
     let bitrateKbps = 0;
 
     if (timeMs > 0) {
         // TODO is there any reason to round here?
-        bitrateKbps = Math.round((bytesProcessed * 8) / timeMs);
+        bitrateKbps = Math.ceil((bytesProcessed * 8) / timeMs);
     }
 
     return bitrateKbps;
