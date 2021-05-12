@@ -726,6 +726,30 @@ JitsiConferenceEventManager.prototype.setupXMPPListeners = function() {
         conferenceDurationObj => {
             conference.eventEmitter.emit(JitsiConferenceEvents.CONFERENCE_CREATED_TIMESTAMP, conferenceDurationObj);
         });
+
+    this._addConferenceXMPPListener(XMPPEvents.AV_MODERATION_CHANGED,
+        (value, mediaType, actorJid) => {
+            const actorParticipant = conference.getParticipants().find(p => p.getJid() === actorJid);
+
+            conference.eventEmitter.emit(JitsiConferenceEvents.AV_MODERATION_CHANGED, {
+                enabled: value,
+                mediaType,
+                actor: actorParticipant
+            });
+        });
+    this._addConferenceXMPPListener(XMPPEvents.AV_MODERATION_PARTICIPANT_APPROVED,
+        (mediaType, jid) => {
+            const participant = conference.getParticipantById(Strophe.getResourceFromJid(jid));
+
+            if (participant) {
+                conference.eventEmitter.emit(JitsiConferenceEvents.AV_MODERATION_PARTICIPANT_APPROVED, {
+                    participant,
+                    mediaType
+                });
+            }
+        });
+    this._addConferenceXMPPListener(XMPPEvents.AV_MODERATION_APPROVED,
+        value => conference.eventEmitter.emit(JitsiConferenceEvents.AV_MODERATION_APPROVED, { mediaType: value }));
 };
 
 /**
