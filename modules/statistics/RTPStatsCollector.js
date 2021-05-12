@@ -1048,7 +1048,7 @@ StatsCollector.prototype._calculateBitrate = function(now, before, fieldName) {
     const bytesBefore = this.getNonNegativeValue(before[fieldName]);
     const bytesProcessed = Math.max(0, bytesNow - bytesBefore);
 
-    const timeMs = (now.timestamp - before.timestamp) / 1000;
+    const timeMs = now.timestamp - before.timestamp;
     let bitrateKbps = 0;
 
     if (timeMs > 0) {
