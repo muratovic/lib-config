@@ -1455,10 +1455,6 @@ JitsiConference.prototype.sendCameraBroadcastPermissionIQ = function(value) {
     this.room.sendCameraBroadcastPermissionIQ(value);
 };
 
-JitsiConference.prototype.sendRaiseHandBroadcastPermissionIQ = function(value) {
-    this.room.sendRaiseHandBroadcastPermissionIQ(value);
-};
-
 /**
  * Maybe clears the timeout which emits {@link ACTION_JINGLE_SI_TIMEOUT}
  * analytics event.
