@@ -141,6 +141,9 @@ export default class ChatRoom extends Listenable {
         this.participantPropertyListener = null;
 
         this.locked = false;
+        this.everybodyHasMicAccess = '';
+        this.everybodyHasCameraAccess = '';
+        this.everybodyCanRaiseHand = '';
         this.transcriptionStatus = JitsiTranscriptionStatus.OFF;
     }
 
@@ -313,23 +316,35 @@ export default class ChatRoom extends Listenable {
 
             this.eventEmitter.emit(XMPPEvents.MUC_ROOM_VISIBILITY_CHANGED, specialRoom, roomOwner);
 
-            const roomHasMicrophoneBroadcastPermissionValue
-                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_microphone"]>value');
+            const everybodyHasMicAccess
+                = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_microphone"]>value')
+                .text();
 
-            this.eventEmitter.emit(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                roomHasMicrophoneBroadcastPermissionValue.text());
+            if (everybodyHasMicAccess !== this.everybodyHasMicAccess) {
+                this.eventEmitter.emit(XMPPEvents.MICROPHONE_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                    everybodyHasMicAccess);
+                this.everybodyHasMicAccess = everybodyHasMicAccess;
+            }
 
-            const roomHasCameraBroadcastPermissionValue
-                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_camera"]>value');
+            const everybodyHasCameraAccess
+                = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_camera"]>value')
+                .text();
 
-            this.eventEmitter.emit(XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                roomHasCameraBroadcastPermissionValue.text());
+            if (everybodyHasCameraAccess !== this.everybodyHasCameraAccess) {
+                this.eventEmitter.emit(XMPPEvents.VIDEO_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                    everybodyHasCameraAccess);
+                this.everybodyHasCameraAccess = everybodyHasCameraAccess;
+            }
 
-            const roomHasRaiseHandBroadcastPermissionValue
-                    = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_raise_hand"]>value');
+            const everybodyCanRaiseHand
+                = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_raise_hand"]>value')
+                .text();
 
-            this.eventEmitter.emit(XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                roomHasRaiseHandBroadcastPermissionValue.text());
+            if (everybodyCanRaiseHand !== this.everybodyCanRaiseHand) {
+                this.eventEmitter.emit(XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                    everybodyCanRaiseHand);
+                this.everybodyCanRaiseHand = everybodyCanRaiseHand;
+            }
 
             if (locked && specialRoom && roomOwner) {
                 const roomSecretValue
