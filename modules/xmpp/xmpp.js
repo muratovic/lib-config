@@ -474,7 +474,7 @@ export default class XMPP extends Listenable {
                 const search = location && location.search;
 
                 if ((search && search.indexOf('login=true') !== -1)
-                        || this.token) {
+                        || this.token || this.options.isLogin) {
                     configDomain = domain;
                 }
             }
