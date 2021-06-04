@@ -340,11 +340,9 @@ export default class ChatRoom extends Listenable {
                 = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_bip_allow_raise_hand"]>value')
                 .text();
 
-            if (everybodyCanRaiseHand !== this.everybodyCanRaiseHand) {
-                this.eventEmitter.emit(XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
-                    everybodyCanRaiseHand);
-                this.everybodyCanRaiseHand = everybodyCanRaiseHand;
-            }
+            this.eventEmitter.emit(XMPPEvents.RAISE_HAND_ACCESS_CHANGED_FOR_ALL_PARTICIPANTS,
+                everybodyCanRaiseHand);
+            this.everybodyCanRaiseHand = everybodyCanRaiseHand;
 
             if (locked && specialRoom && roomOwner) {
                 const roomSecretValue
