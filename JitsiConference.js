@@ -1109,6 +1109,10 @@ JitsiConference.prototype.replaceTrack = function(oldTrack, newTrack) {
                 oldTrack && oldTrack.isVideoTrack() && this.rtc.setVideoType(VideoType.NONE);
             }
 
+            if (this.isMutedByFocus || this.isVideoMutedByFocus) {
+                this._fireMuteChangeEvent(newTrack);
+            }
+
             return Promise.resolve();
         })
         .catch(error => Promise.reject(new Error(error)));
