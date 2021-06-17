@@ -24,18 +24,33 @@ import initStropheUtil from './strophe.util';
 const logger = getLogger(__filename);
 
 /**
+* Regex to extract exact error message on jwt error.
+*/
+const FAILURE_REGEX = /<failure.*><not-allowed\/><text>(.*)<\/text><\/failure>/gi;
+
+/**
  * Creates XMPP connection.
  *
  * @param {Object} options
  * @param {string} [options.token] - JWT token used for authentication(JWT authentication module must be enabled in
  * Prosody).
  * @param {string} options.serviceUrl - The service URL for XMPP connection.
+ * @param {string} options.shard - The shard where XMPP connection initially landed.
  * @param {string} options.enableWebsocketResume - True to enable stream resumption.
  * @param {number} [options.websocketKeepAlive] - See {@link XmppConnection} constructor.
+ * @param {number} [options.websocketKeepAliveUrl] - See {@link XmppConnection} constructor.
  * @param {Object} [options.xmppPing] - See {@link XmppConnection} constructor.
  * @returns {XmppConnection}
  */
-function createConnection({ enableWebsocketResume, serviceUrl = '/http-bind', token, websocketKeepAlive, xmppPing }) {
+function createConnection({
+    enableWebsocketResume,
+    serviceUrl = '/http-bind',
+    shard,
+    token,
+    websocketKeepAlive,
+    websocketKeepAliveUrl,
+    xmppPing }) {
+
     // Append token as URL param
     if (token) {
         // eslint-disable-next-line no-param-reassign
@@ -46,7 +61,9 @@ function createConnection({ enableWebsocketResume, serviceUrl = '/http-bind', to
         enableWebsocketResume,
         serviceUrl,
         websocketKeepAlive,
-        xmppPing
+        websocketKeepAliveUrl,
+        xmppPing,
+        shard
     });
 }
 
@@ -104,6 +121,8 @@ export default class XMPP extends Listenable {
      * module try to resume the session in case the Websocket connection breaks.
      * @param {number} [options.websocketKeepAlive] - The websocket keep alive interval. See {@link XmppConnection}
      * constructor for more details.
+     * @param {number} [options.websocketKeepAliveUrl] - The websocket keep alive url. See {@link XmppConnection}
+     * constructor for more details.
      * @param {Object} [options.xmppPing] - The xmpp ping settings.
      * @param {Array<Object>} options.p2pStunServers see {@link JingleConnectionPlugin} for more details.
      * @param token
@@ -131,7 +150,27 @@ export default class XMPP extends Listenable {
             serviceUrl: options.serviceUrl || options.bosh,
             token,
             websocketKeepAlive: options.websocketKeepAlive,
-            xmppPing
+            websocketKeepAliveUrl: options.websocketKeepAliveUrl,
+            xmppPing,
+            shard: options.deploymentInfo?.shard
+        });
+
+        // forwards the shard changed event
+        this.connection.on(XmppConnection.Events.CONN_SHARD_CHANGED, () => {
+            /* eslint-disable camelcase */
+            const details = {
+                shard_changed: true,
+                suspend_time: this.connection.ping.getPingSuspendTime(),
+                time_since_last_success: this.connection.getTimeSinceLastSuccess()
+            };
+            /* eslint-enable camelcase */
+
+            this.eventEmitter.emit(
+                JitsiConnectionEvents.CONNECTION_FAILED,
+                JitsiConnectionErrors.OTHER_ERROR,
+                undefined,
+                undefined,
+                details);
         });
 
         this._initStrophePlugins();
@@ -168,8 +207,9 @@ export default class XMPP extends Listenable {
         this.caps.addFeature('urn:xmpp:jingle:apps:rtp:audio');
         this.caps.addFeature('urn:xmpp:jingle:apps:rtp:video');
 
-        // Disable RTX on Firefox because of https://bugzilla.mozilla.org/show_bug.cgi?id=1668028.
-        if (!(this.options.disableRtx || browser.isFirefox())) {
+        // Disable RTX on Firefox 83 and older versions because of
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=1668028
+        if (!(this.options.disableRtx || (browser.isFirefox() && browser.isVersionLessThan(84)))) {
             this.caps.addFeature('urn:ietf:rfc:4588');
         }
         if (this.options.enableOpusRed === true && browser.supportsAudioRed()) {
@@ -368,13 +408,31 @@ export default class XMPP extends Listenable {
                 }
             }
         } else if (status === Strophe.Status.AUTHFAIL) {
+            const lastFailedRawMessage = this.getConnection().getLastFailedMessage();
+
             // wrong password or username, prompt user
             this.eventEmitter.emit(
                 JitsiConnectionEvents.CONNECTION_FAILED,
                 JitsiConnectionErrors.PASSWORD_REQUIRED,
-                msg,
+                msg || this._parseConnectionFailedMessage(lastFailedRawMessage),
                 credentials);
         }
+    }
+
+    /**
+    * Parses a raw failure xmpp xml message received on auth failed.
+    *
+    * @param {string} msg - The raw failure message from xmpp.
+    * @returns {string|null} - The parsed message from the raw xmpp message.
+    */
+    _parseConnectionFailedMessage(msg) {
+        if (!msg) {
+            return null;
+        }
+
+        const matches = FAILURE_REGEX.exec(msg);
+
+        return matches ? matches[1] : null;
     }
 
     /**

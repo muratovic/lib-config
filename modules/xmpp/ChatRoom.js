@@ -237,6 +237,10 @@ export default class ChatRoom extends Listenable {
             if (this.password) {
                 pres.c('password').t(this.password).up();
             }
+            if (this.options.billingId) {
+                pres.c('billingid').t(this.options.billingId).up();
+            }
+
             pres.up();
         }
 
@@ -1053,6 +1057,16 @@ export default class ChatRoom extends Listenable {
                 actorNick = actorSelect.attr('nick');
             }
 
+            let reason;
+            const reasonSelect
+                = $(pres).find(
+                '>x[xmlns="http://jabber.org/protocol/muc#user"]'
+                + '>item>reason');
+
+            if (reasonSelect.length) {
+                reason = reasonSelect.text();
+            }
+
             // we first fire the kicked so we can show the participant
             // who kicked, before notifying that participant left
             // we fire kicked for us and for any participant kicked
@@ -1060,7 +1074,8 @@ export default class ChatRoom extends Listenable {
                 XMPPEvents.KICKED,
                 isSelfPresence,
                 actorNick,
-                Strophe.getResourceFromJid(from));
+                Strophe.getResourceFromJid(from),
+                reason);
         }
 
         if (isSelfPresence) {
@@ -1267,14 +1282,15 @@ export default class ChatRoom extends Listenable {
     /**
      *
      * @param jid
+     * @param reason
      */
-    kick(jid) {
+    kick(jid, reason = 'You have been kicked.') {
         const kickIQ = $iq({ to: this.roomjid,
             type: 'set' })
             .c('query', { xmlns: 'http://jabber.org/protocol/muc#admin' })
             .c('item', { nick: Strophe.getResourceFromJid(jid),
                 role: 'none' })
-            .c('reason').t('You have been kicked.').up().up().up();
+            .c('reason').t(reason).up().up().up();
 
         this.connection.sendIQ(
             kickIQ,
@@ -1420,7 +1436,16 @@ export default class ChatRoom extends Listenable {
                         .up()
                         .up();
 
-                    this.connection.sendIQ(formsubmit, onSuccess, onError);
+                    this.connection.sendIQ(
+                        formsubmit,
+                        () => {
+
+                            // we set the password in chat room so we can use it
+                            // later when dialing out
+                            this.password = key;
+                            onSuccess();
+                        },
+                        onError);
                 } else {
                     onNotSupported();
                 }
@@ -1511,14 +1536,26 @@ export default class ChatRoom extends Listenable {
 
     /**
      * Adds the key to the presence map, overriding any previous value.
-     * @param key
-     * @param values
+     * @param key The key to add or replace.
+     * @param values The new values.
+     * @returns {boolean|null} <tt>true</tt> if the operation succeeded or <tt>false</tt> when no add or replce was
+     * performed as the value was already there.
      */
-    addToPresence(key, values) {
+    addOrReplaceInPresence(key, values) {
         values.tagName = key;
+
+        const matchingNodes = this.presMap.nodes.filter(node => key === node.tagName);
+
+        // if we have found just one, let's check is it the same
+        if (matchingNodes.length === 1 && isEqual(matchingNodes[0], values)) {
+            return false;
+        }
+
         this.removeFromPresence(key);
         this.presMap.nodes.push(values);
         this.presenceUpdateTime = Date.now();
+
+        return true;
     }
 
     /**
@@ -1644,7 +1681,7 @@ export default class ChatRoom extends Listenable {
      * @param mute
      */
     addAudioInfoToPresence(mute) {
-        this.addToPresence(
+        return this.addOrReplaceInPresence(
             'audiomuted',
             {
                 attributes: { 'xmlns': 'http://jitsi.org/jitmeet/audio' },
@@ -1658,10 +1695,8 @@ export default class ChatRoom extends Listenable {
      * @param callback
      */
     sendAudioInfoPresence(mute, callback) {
-        this.addAudioInfoToPresence(mute);
-
         // FIXME resend presence on CONNECTED
-        this.sendPresence();
+        this.addAudioInfoToPresence(mute) && this.sendPresence();
         if (callback) {
             callback();
         }
@@ -1672,7 +1707,7 @@ export default class ChatRoom extends Listenable {
      * @param mute
      */
     addVideoInfoToPresence(mute) {
-        this.addToPresence(
+        return this.addOrReplaceInPresence(
             'videomuted',
             {
                 attributes: { 'xmlns': 'http://jitsi.org/jitmeet/video' },
@@ -1685,8 +1720,7 @@ export default class ChatRoom extends Listenable {
      * @param mute
      */
     sendVideoInfoPresence(mute) {
-        this.addVideoInfoToPresence(mute);
-        this.sendPresence();
+        this.addVideoInfoToPresence(mute) && this.sendPresence();
     }
 
     /**
@@ -1709,7 +1743,7 @@ export default class ChatRoom extends Listenable {
             return null;
         }
         const data = {
-            muted: false, // unmuted by default
+            muted: true, // muted by default
             videoType: undefined // no video type by default
         };
         let mutedNode = null;
@@ -1718,10 +1752,14 @@ export default class ChatRoom extends Listenable {
             mutedNode = filterNodeFromPresenceJSON(pres, 'audiomuted');
         } else if (mediaType === MediaType.VIDEO) {
             mutedNode = filterNodeFromPresenceJSON(pres, 'videomuted');
+            const codecTypeNode = filterNodeFromPresenceJSON(pres, 'jitsi_participant_codecType');
             const videoTypeNode = filterNodeFromPresenceJSON(pres, 'videoType');
 
             if (videoTypeNode.length > 0) {
                 data.videoType = videoTypeNode[0].value;
+            }
+            if (codecTypeNode.length > 0) {
+                data.codecType = codecTypeNode[0].value;
             }
         } else {
             logger.error(`Unsupported media type: ${mediaType}`);
@@ -1729,7 +1767,9 @@ export default class ChatRoom extends Listenable {
             return null;
         }
 
-        data.muted = mutedNode.length > 0 && mutedNode[0].value === 'true';
+        if (mutedNode.length > 0) {
+            data.muted = mutedNode[0].value === 'true';
+        }
 
         return data;
     }
@@ -1797,14 +1837,15 @@ export default class ChatRoom extends Listenable {
      * Mutes remote participant.
      * @param jid of the participant
      * @param mute
+     * @param mediaType
      */
-    muteParticipant(jid, mute) {
+    muteParticipant(jid, mute, mediaType) {
         logger.info('set mute', mute);
         const iqToFocus = $iq(
             { to: this.focusMucJid,
                 type: 'set' })
             .c('mute', {
-                xmlns: 'http://jitsi.org/jitmeet/audio',
+                xmlns: `http://jitsi.org/jitmeet/${mediaType}`,
                 jid
             })
             .t(mute.toString())
@@ -1832,6 +1873,31 @@ export default class ChatRoom extends Listenable {
 
         if (mute.length && mute.text() === 'true') {
             this.eventEmitter.emit(XMPPEvents.AUDIO_MUTED_BY_FOCUS, mute.attr('actor'));
+        } else {
+            // XXX Why do we support anything but muting? Why do we encode the
+            // value in the text of the element? Why do we use a separate XML
+            // namespace?
+            logger.warn('Ignoring a mute request which does not explicitly '
+                + 'specify a positive mute command.');
+        }
+    }
+
+    /**
+     * TODO: Document
+     * @param iq
+     */
+    onMuteVideo(iq) {
+        const from = iq.getAttribute('from');
+
+        if (from !== this.focusMucJid) {
+            logger.warn('Ignored mute from non focus peer');
+
+            return;
+        }
+        const mute = $(iq).find('mute');
+
+        if (mute.length && mute.text() === 'true') {
+            this.eventEmitter.emit(XMPPEvents.VIDEO_MUTED_BY_FOCUS, mute.attr('actor'));
         } else {
             // XXX Why do we support anything but muting? Why do we encode the
             // value in the text of the element? Why do we use a separate XML

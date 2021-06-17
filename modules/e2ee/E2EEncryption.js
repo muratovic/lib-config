@@ -6,6 +6,7 @@ import debounce from 'lodash.debounce';
 import * as JitsiConferenceEvents from '../../JitsiConferenceEvents';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import browser from '../browser';
+import Deferred from '../util/Deferred';
 
 import E2EEContext from './E2EEContext';
 import { OlmAdapter } from './OlmAdapter';
@@ -16,13 +17,6 @@ const logger = getLogger(__filename);
 // Period which we'll wait before updating / rotating our keys when a participant
 // joins or leaves.
 const DEBOUNCE_PERIOD = 5000;
-
-// We use ECDSA with Curve P-521 for the long-term signing keys. See
-//   https://developer.mozilla.org/en-US/docs/Web/API/EcKeyGenParams
-const SIGNATURE_OPTIONS = {
-    name: 'ECDSA',
-    namedCurve: 'P-521'
-};
 
 /**
  * This module integrates {@link E2EEContext} with {@link JitsiConference} in order to enable E2E encryption.
@@ -39,7 +33,7 @@ export class E2EEncryption {
         this._enabled = false;
         this._initialized = false;
         this._key = undefined;
-        this._signatureKeyPair = undefined;
+        this._enabling = undefined;
 
         this._e2eeCtx = new E2EEContext();
         this._olmAdapter = new OlmAdapter(conference);
@@ -128,20 +122,19 @@ export class E2EEncryption {
             return;
         }
 
+        this._enabling && await this._enabling;
+
+        this._enabling = new Deferred();
+
         this._enabled = enabled;
 
+        if (enabled) {
+            await this._olmAdapter.initSessions();
+        }
+
+        this.conference.setLocalParticipantProperty('e2ee.enabled', enabled);
+
         if (!this._initialized && enabled) {
-            // Generate a frame signing key pair. Per session currently.
-            this._signatureKeyPair = await crypto.subtle.generateKey(SIGNATURE_OPTIONS,
-                true, [ 'sign', 'verify' ]);
-            this._e2eeCtx.setSignatureKey(this.conference.myUserId(), this._signatureKeyPair.privateKey);
-
-            // Serialize the JWK of the signing key. Using JSON, might be easy to xml-ify.
-            const serializedSigningKey = await crypto.subtle.exportKey('jwk', this._signatureKeyPair.publicKey);
-
-            // TODO: sign this with the OLM account key.
-            this.conference.setLocalParticipantProperty('e2ee.signatureKey', JSON.stringify(serializedSigningKey));
-
             // Need to re-create the peerconnections in order to apply the insertable streams constraint.
             // TODO: this was necessary due to some audio issues when indertable streams are used
             // even though encryption is not performed. This should be fixed in the browser eventually.
@@ -155,10 +148,12 @@ export class E2EEncryption {
         this._key = enabled ? this._generateKey() : false;
 
         // Send it to others using the E2EE olm channel.
-        this._olmAdapter.updateKey(this._key).then(index => {
-            // Set our key so we begin encrypting.
-            this._e2eeCtx.setKey(this.conference.myUserId(), this._key, index);
-        });
+        const index = await this._olmAdapter.updateKey(this._key);
+
+        // Set our key so we begin encrypting.
+        this._e2eeCtx.setKey(this.conference.myUserId(), this._key, index);
+
+        this._enabling.resolve();
     }
 
     /**
@@ -268,17 +263,11 @@ export class E2EEncryption {
         case 'e2ee.idKey':
             logger.debug(`Participant ${participant.getId()} updated their id key: ${newValue}`);
             break;
-        case 'e2ee.signatureKey':
-            logger.debug(`Participant ${participant.getId()} updated their signature key: ${newValue}`);
-            if (newValue) {
-                const parsed = JSON.parse(newValue);
+        case 'e2ee.enabled':
+            if (!newValue && this._enabled) {
+                this._olmAdapter.clearParticipantSession(participant);
 
-                const importedKey = await crypto.subtle.importKey('jwk', parsed, { name: 'ECDSA',
-                    namedCurve: parsed.crv }, true, parsed.key_ops);
-
-                this._e2eeCtx.setSignatureKey(participant.getId(), importedKey);
-            } else {
-                logger.warn(`e2ee signatureKey for ${participant.getId()} could not be updated with empty value.`);
+                this._rotateKey();
             }
             break;
         }
@@ -297,7 +286,7 @@ export class E2EEncryption {
 
         this._key = new Uint8Array(newKey);
 
-        const index = await this._olmAdapter.updateCurrentKey(this._key);
+        const index = this._olmAdapter.updateCurrentKey(this._key);
 
         this._e2eeCtx.setKey(this.conference.myUserId(), this._key, index);
     }
