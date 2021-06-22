@@ -913,7 +913,6 @@ class RTCUtils extends Listenable {
     * on failure.
     **/
     getUserMediaWithConstraints(um, options = {}) {
-        console.log('AHOY', options);
         const constraints = getConstraints(um, options);
 
         logger.info('Get media constraints', JSON.stringify(constraints));
@@ -934,19 +933,6 @@ class RTCUtils extends Listenable {
                     navigator.mediaDevices.getUserMedia(videoConstraints)
                 ])
                 .then(async ([ audioStream, videoStream ]) => {
-                    const aud = audioStream.getAudioTracks()[0].applyConstraints({
-                        audio: {
-                            deviceId: await navigator.mediaDevices.enumerateDevices()
-                            .then(devices =>
-                                devices.find(({
-                                    kind, groupId
-                                }) => kind === 'audiooutput' && groupId !== 'default' // Chromium
-                                ))
-                              .deviceId
-                        }
-                    });
-
-                    console.log('AHOYaud', aud);
                     const combinedStream = new MediaStream([
                         ...videoStream.getVideoTracks(),
                         ...audioStream.getAudioTracks()
