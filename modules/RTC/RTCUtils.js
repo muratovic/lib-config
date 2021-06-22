@@ -338,9 +338,7 @@ function getConstraints(um, options = {}) {
             // which, in the case a users has multiple monitors, leads to them being shared all
             // at once. However we tested with chromeMediaSourceId present and it seems to be
             // working properly and also takes care of the previously mentioned issue.
-            constraints.audio = { mandatory: {
-                chromeMediaSource: constraints.video.mandatory.chromeMediaSource
-            } };
+            constraints.audio = { echoCancellation: true };
         }
     }
 
@@ -915,22 +913,68 @@ class RTCUtils extends Listenable {
     * on failure.
     **/
     getUserMediaWithConstraints(um, options = {}) {
+        console.log('AHOY', options);
         const constraints = getConstraints(um, options);
 
         logger.info('Get media constraints', JSON.stringify(constraints));
 
         return new Promise((resolve, reject) => {
-            navigator.mediaDevices.getUserMedia(constraints)
-            .then(stream => {
-                logger.log('onUserMediaSuccess');
-                updateGrantedPermissions(um, stream);
-                resolve(stream);
-            })
-            .catch(error => {
-                logger.warn(`Failed to get access to local media. ${error} ${JSON.stringify(constraints)}`);
-                updateGrantedPermissions(um, undefined);
-                reject(new JitsiTrackError(error, constraints, um));
-            });
+            if (constraints.audio && constraints.video) {
+                const audioConstraints = {
+                    audio: constraints.audio
+                };
+
+                const videoConstraints = {
+                    audio: false,
+                    video: constraints.video
+                };
+
+                Promise.all([
+                    navigator.mediaDevices.getUserMedia(audioConstraints),
+                    navigator.mediaDevices.getUserMedia(videoConstraints)
+                ])
+                .then(async ([ audioStream, videoStream ]) => {
+                    const aud = audioStream.getAudioTracks()[0].applyConstraints({
+                        audio: {
+                            deviceId: await navigator.mediaDevices.enumerateDevices()
+                            .then(devices =>
+                                devices.find(({
+                                    kind, groupId
+                                }) => kind === 'audiooutput' && groupId !== 'default' // Chromium
+                                ))
+                              .deviceId
+                        }
+                    });
+
+                    console.log('AHOYaud', aud);
+                    const combinedStream = new MediaStream([
+                        ...videoStream.getVideoTracks(),
+                        ...audioStream.getAudioTracks()
+                    ]);
+
+                    updateGrantedPermissions(um, combinedStream);
+                    resolve(combinedStream);
+                })
+                .catch(error => {
+                    logger.warn(`Failed to get access to local media. ${error} ${JSON.stringify(constraints)}`);
+                    updateGrantedPermissions(um, undefined);
+                    reject(new JitsiTrackError(error, constraints, um));
+                });
+            } else {
+                navigator.mediaDevices.getUserMedia(constraints)
+                .then(stream => {
+                    logger.log('onUserMediaSuccess');
+                    updateGrantedPermissions(um, stream);
+                    resolve(stream);
+                })
+                .catch(error => {
+                    logger.warn(`Failed to get access to local media. ${error} ${JSON.stringify(constraints)}`);
+                    updateGrantedPermissions(um, undefined);
+                    reject(new JitsiTrackError(error, constraints, um));
+                });
+            }
+
+
         });
     }
 
