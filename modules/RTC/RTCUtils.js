@@ -338,7 +338,7 @@ function getConstraints(um, options = {}) {
             // which, in the case a users has multiple monitors, leads to them being shared all
             // at once. However we tested with chromeMediaSourceId present and it seems to be
             // working properly and also takes care of the previously mentioned issue.
-            constraints.audio = { echoCancellation: true };
+            constraints.audio = true;
         }
     }
 
