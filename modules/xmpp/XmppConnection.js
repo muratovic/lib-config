@@ -2,7 +2,10 @@ import { getLogger } from 'jitsi-meet-logger';
 import { $pres, Strophe } from 'strophe.js';
 import 'strophejs-plugin-stream-management';
 
-import networkInfo from '../connectivity/NetworkInfo';
+import networkInfo, {
+    default as NetworkInfo,
+    NETWORK_INFO_EVENT
+} from '../connectivity/NetworkInfo';
 import Listenable from '../util/Listenable';
 
 import ResumeTask from './ResumeTask';
@@ -241,6 +244,14 @@ export default class XmppConnection extends Listenable {
      */
     connect(jid, pass, callback, ...args) {
         this._stropheConn.connect(jid, pass, this._stropheConnectionCb.bind(this, callback), ...args);
+
+        if (!this._networkOnlineListener) {
+            this._networkOnlineListener = NetworkInfo.addEventListener(NETWORK_INFO_EVENT, ({ isOnline }) => {
+                if (!isOnline) {
+                    this._stropheConnectionCb(callback, Strophe.Status.DISCONNECTED);
+                }
+            });
+        }
     }
 
     /* eslint-enable max-params */
@@ -254,7 +265,7 @@ export default class XmppConnection extends Listenable {
      * @param {*} args - The rest of the arguments passed by Strophe.
      * @private
      */
-    _stropheConnectionCb(targetCallback, status, ...args) {
+    async _stropheConnectionCb(targetCallback, status, ...args) {
         this._status = status;
 
         let blockCallback = false;
@@ -269,7 +280,7 @@ export default class XmppConnection extends Listenable {
             this.ping.stopInterval();
 
             // FIXME add RECONNECTING state instead of blocking the DISCONNECTED update
-            blockCallback = this._tryResumingConnection();
+            blockCallback = await this._tryResumingConnection();
             if (!blockCallback) {
                 clearTimeout(this._wsKeepAlive);
             }
@@ -315,6 +326,11 @@ export default class XmppConnection extends Listenable {
         clearTimeout(this._wsKeepAlive);
         this._clearDeferredIQs();
         this._stropheConn.disconnect(...args);
+
+        if (this._networkOnlineListener) {
+            this._networkOnlineListener();
+            this._networkOnlineListener = null;
+        }
     }
 
     /**
@@ -557,16 +573,22 @@ export default class XmppConnection extends Listenable {
      * the token is present it means the connection can be resumed.
      *
      * @private
-     * @returns {boolean}
+     * @returns {Promise<boolean>}
      */
-    _tryResumingConnection() {
+    async _tryResumingConnection() {
+        logger.debug('_tryResumingConnection');
+
         const { streamManagement } = this._stropheConn;
         const resumeToken = streamManagement && streamManagement.getResumeToken();
 
         if (resumeToken) {
             this._resumeTask.schedule();
 
-            return networkInfo.isOnline();
+            const isOnline = await networkInfo.getStableStatus();
+
+            logger.debug('_tryResumingConnection isOnline', isOnline);
+
+            return isOnline;
         }
 
         return false;
