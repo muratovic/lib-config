@@ -22,6 +22,9 @@ export class NetworkInfo extends Listenable {
         this._current = {
             isOnline: true
         };
+
+        this._lastUpdate = 0;
+        this._stableStatusTimeout = null;
     }
 
     /**
@@ -33,7 +36,36 @@ export class NetworkInfo extends Listenable {
         this._current = {
             isOnline: isOnline === true
         };
+
+        this._lastUpdate = Date.now();
+
         this.eventEmitter.emit(NETWORK_INFO_EVENT, this._current);
+    }
+
+    /**
+     * Return connection status when it stable and doesn't change for 5 seconds.
+     * If status was changed in 5 second window, then wait until status is stable.
+     * @returns {Promise<boolean>}
+     */
+    getStableStatus() {
+        return new Promise(resolve => {
+            logger.debug('getStableStatus');
+
+            const prevStatusUpdate = this._lastUpdate;
+
+            if (!this._stableStatusTimeout) {
+                this._stableStatusTimeout = setTimeout(async () => {
+
+                    this._stableStatusTimeout = null;
+
+                    if (prevStatusUpdate === this._lastUpdate) {
+                        resolve(this._current.isOnline);
+                    } else {
+                        resolve(await this.getStableStatus());
+                    }
+                }, 5000);
+            }
+        });
     }
 
     /**
