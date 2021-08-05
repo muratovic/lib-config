@@ -448,10 +448,9 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
                     JitsiConferenceEvents.ENDPOINT_MESSAGE_RECEIVED,
                     participant, payload);
             } else {
-                logger.warn(
-                    'Ignored XMPPEvents.JSON_MESSAGE_RECEIVED for not existing '
-                    + `participant: ${from}`,
-                    payload);
+                conference.eventEmitter.emit(
+                    JitsiConferenceEvents.NON_PARTICIPANT_MESSAGE_RECEIVED,
+                    id, payload);
             }
         });
 
