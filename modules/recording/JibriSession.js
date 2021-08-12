@@ -1,6 +1,7 @@
 import { $iq } from 'strophe.js';
 
 import recordingXMLUtils from './recordingXMLUtils';
+import recordingConstants from "./recordingConstants";
 
 /**
  * Represents a recording session.
@@ -80,6 +81,26 @@ export default class JibriSession {
      */
     getMode() {
         return this._mode;
+    }
+
+
+    /**
+     * Returns the package type for current jibri user.
+     *
+     * @returns {string}
+     */
+    getPackageType() {
+        return this._packageType;
+    }
+
+    /**
+     * Sets the last known error message related to the session.
+     *
+     * @param {string} packageType - Package type which is individual or corporate.
+     * @returns {void}
+     */
+    setPackageType(packageType) {
+        this._packageType = packageType;
     }
 
     /**
@@ -239,9 +260,15 @@ export default class JibriSession {
      * @returns {void}
      */
     _setErrorFromIq(errorIq) {
-        const error = errorIq.getElementsByTagName('error')[0];
+        const errorTagObj = errorIq.getElementsByTagName('error')[0];
 
-        this.setError(error.children[0].tagName);
+        const errorTagChildTagName = errorTagObj.children[0].tagName;
+
+        if (errorTagChildTagName === recordingConstants.error.POLICY_VIOLATION) {
+            this.setPackageType(errorTagObj.getAttribute('business_type'));
+        }
+
+        this.setError(errorTagChildTagName);
     }
 
     /**
