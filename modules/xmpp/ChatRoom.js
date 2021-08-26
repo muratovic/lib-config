@@ -933,6 +933,7 @@ export default class ChatRoom extends Listenable {
         } else {
             msg.c(elementName, { xmlns: 'http://jitsi.org/jitmeet' }, message);
         }
+
         this.connection.send(msg);
         this.eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, message);
     }

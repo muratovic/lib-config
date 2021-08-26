@@ -949,8 +949,7 @@ export default class XMPP extends Listenable {
                 terminationNotificationTime: parsedJson.termination_notification_time
             };
 
-            this.eventEmitter.emit(
-                XMPPEvents.CONFERENCE_TIMESTAMP_RECEIVED, conferenceDurationObj);
+            this.eventEmitter.emit(XMPPEvents.CONFERENCE_TIMESTAMP_RECEIVED, conferenceDurationObj);
         } else if (parsedJson[JITSI_MEET_MUC_TYPE] === 'av_moderation') {
             this.eventEmitter.emit(XMPPEvents.AV_MODERATION_RECEIVED, parsedJson);
         }
