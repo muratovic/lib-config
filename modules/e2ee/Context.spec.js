@@ -81,9 +81,9 @@ describe('E2EE Context', () => {
                 enqueue: encodedFrame => {
                     const data = new Uint8Array(encodedFrame.data);
 
-                    // An audio frame will have an overhead of 6 bytes with this counter and key size:
-                    //   4 bytes truncated signature, counter (1 byte) and 1 byte trailer.
-                    expect(data.byteLength).toEqual(audioBytes.length + 6);
+                    // An audio frame will have an overhead of 30 bytes and key size:
+                    // 16 bytes authentication tag, 12 bytes iv, iv length (1 byte) and 1 byte key index.
+                    expect(data.byteLength).toEqual(audioBytes.length + 30);
 
                     // TODO: provide test vector.
                     done();
@@ -98,10 +98,9 @@ describe('E2EE Context', () => {
                 enqueue: encodedFrame => {
                     const data = new Uint8Array(encodedFrame.data);
 
-                    // A video frame will have an overhead of 12 bytes with this counter and key size:
-                    //   10 bytes signature, counter (1 byte) and 1 byte trailer.
-
-                    expect(data.byteLength).toEqual(videoBytes.length + 12);
+                    // A video frame will have an overhead of 30 bytes and key size:
+                    // 16 bytes authentication tag, 12 bytes iv, iv length (1 byte) and 1 byte key index.
+                    expect(data.byteLength).toEqual(videoBytes.length + 30);
 
                     // TODO: provide test vector.
                     done();
@@ -167,174 +166,6 @@ describe('E2EE Context', () => {
                 }
             };
 
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-        });
-    });
-
-    describe('E2EE Signature', () => {
-        let privateKey;
-        let publicKey;
-
-        // Generated one-time using
-        // await crypto.subtle.generateKey({name: 'ECDSA', namedCurve: 'P-521'}, false, ['sign', 'verify']);
-        // then exported as JWK. Only use as test vectors.
-        const rawPublicKey = {
-            crv: 'P-521',
-            ext: true,
-            key_ops: [ 'verify' ], // eslint-disable-line camelcase
-            kty: 'EC',
-            x: 'AEs3y1FyefvjTC6JaJ1s00k5CFnESu5xIofPAmu286Y4UWyx8kB3jTHPKDO8bK81XT2_HbbN9ONm2D5TYCCxoR5r',
-            y: 'AZHlLHuSEWM401dy2lo-nu100Hp1ixcYePf9sNboaZruXctvoAt_sAX6MM0NccHx4587yhWfn9NG7fCX60P5KAvA'
-        };
-        const rawPrivateKey = {
-            crv: 'P-521',
-            ext: true,
-            key_ops: [ 'sign' ], // eslint-disable-line camelcase
-            kty: 'EC',
-            d: 'AV3aTIFuO9Zm0SXVlnujUvlvGvyPrY0pEOtX2pxD2JwPvWWoLXfTA052MHhqiii2RORe_7Ivm_PNeBwhYcO04i-K',
-            x: 'AEs3y1FyefvjTC6JaJ1s00k5CFnESu5xIofPAmu286Y4UWyx8kB3jTHPKDO8bK81XT2_HbbN9ONm2D5TYCCxoR5r',
-            y: 'AZHlLHuSEWM401dy2lo-nu100Hp1ixcYePf9sNboaZruXctvoAt_sAX6MM0NccHx4587yhWfn9NG7fCX60P5KAvA'
-        };
-
-        beforeEach(async () => {
-            privateKey = await crypto.subtle.importKey('jwk', rawPrivateKey, { name: 'ECDSA',
-                namedCurve: 'P-521' }, false, [ 'sign' ]);
-            publicKey = await crypto.subtle.importKey('jwk', rawPublicKey, { name: 'ECDSA',
-                namedCurve: 'P-521' }, false, [ 'verify' ]);
-
-            await sender.setKey(key, 0);
-            await receiver.setKey(key, 0);
-            sender.setSignatureKey(privateKey);
-            receiver.setSignatureKey(publicKey);
-        });
-
-        it('signs the first frame', async done => {
-            sendController = {
-                enqueue: encodedFrame => {
-                    const data = new Uint8Array(encodedFrame.data);
-
-                    // Check that the signature bit is set.
-                    expect(data[data.byteLength - 1] & 0x80).toEqual(0x80);
-
-                    // An audio frame will have an overhead of 6 bytes with this counter and key size:
-                    //   4 bytes truncated signature, counter (1 byte) and 1 byte trailer.
-                    // In addition to that we have the 132 bytes signature.
-                    expect(data.byteLength).toEqual(audioBytes.length + 6 + 132);
-
-                    // TODO: provide test vector for the signature.
-                    done();
-                }
-            };
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-        });
-
-        it('signs subsequent frames from different sources', async done => {
-            let frameCount = 0;
-
-            sendController = {
-                enqueue: encodedFrame => {
-                    frameCount++;
-                    const data = new Uint8Array(encodedFrame.data);
-
-                    expect(data[data.byteLength - 1] & 0x80).toEqual(0x80);
-
-                    if (frameCount === 2) {
-                        done();
-                    }
-                }
-            };
-
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-
-            const secondFrame = makeAudioFrame();
-
-            secondFrame.getMetadata = () => {
-                return { synchronizationSource: 456 };
-            };
-            await sender.encodeFunction(secondFrame, sendController);
-        });
-
-        it('signs subsequent key frames from the same source', async done => {
-            let frameCount = 0;
-
-            sendController = {
-                enqueue: encodedFrame => {
-                    frameCount++;
-                    const data = new Uint8Array(encodedFrame.data);
-
-                    expect(data[data.byteLength - 1] & 0x80).toEqual(0x80);
-
-                    if (frameCount === 2) {
-                        done();
-                    }
-                }
-            };
-
-            await sender.encodeFunction(makeVideoFrame(), sendController);
-            await sender.encodeFunction(makeVideoFrame(), sendController);
-        });
-
-
-        it('signs subsequent frames from the same source', async done => {
-            let frameCount = 0;
-
-            sendController = {
-                enqueue: encodedFrame => {
-                    frameCount++;
-                    const data = new Uint8Array(encodedFrame.data);
-
-                    expect(data[data.byteLength - 1] & 0x80).toEqual(0x80);
-
-                    if (frameCount === 2) {
-                        done();
-                    }
-                }
-            };
-
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-        });
-
-        it('signs after ratcheting the sender key', async done => {
-            let frameCount = 0;
-
-            sendController = {
-                enqueue: encodedFrame => {
-                    frameCount++;
-                    const data = new Uint8Array(encodedFrame.data);
-
-                    expect(data[data.byteLength - 1] & 0x80).toEqual(0x80);
-
-                    if (frameCount === 2) {
-                        done();
-                    }
-                }
-            };
-
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-
-            // Ratchet the key. We reimport from the raw bytes.
-            const material = await importKey(key);
-
-            await sender.setKey(await ratchet(material), 0);
-            await sender.encodeFunction(makeAudioFrame(), sendController);
-        });
-
-        it('verifies the frame', async done => {
-            sendController = {
-                enqueue: async encodedFrame => {
-                    await receiver.decodeFunction(encodedFrame, receiveController);
-                }
-            };
-            receiveController = {
-                enqueue: encodedFrame => {
-                    const data = new Uint8Array(encodedFrame.data);
-
-                    expect(data.byteLength).toEqual(audioBytes.length);
-                    expect(Array.from(data)).toEqual(audioBytes);
-                    done();
-                }
-            };
             await sender.encodeFunction(makeAudioFrame(), sendController);
         });
     });

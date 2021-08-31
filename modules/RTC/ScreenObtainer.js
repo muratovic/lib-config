@@ -5,7 +5,10 @@ import browser from '../browser';
 
 const logger = require('jitsi-meet-logger').getLogger(__filename);
 
-let gumFunction = null;
+/**
+ * The default frame rate for Screen Sharing.
+ */
+export const SS_DEFAULT_FRAME_RATE = 5;
 
 /**
  * Handles obtaining a stream from a screen capture on different browsers.
@@ -25,12 +28,9 @@ const ScreenObtainer = {
      * (this.obtainStream).
      *
      * @param {object} options
-     * @param {Function} gum GUM method
      */
-    init(options = {}, gum) {
+    init(options = {}) {
         this.options = options;
-        gumFunction = gum;
-
         this.obtainStream = this._createObtainStreamMethod();
 
         if (!this.obtainStream) {
@@ -47,7 +47,7 @@ const ScreenObtainer = {
      */
     _createObtainStreamMethod() {
         if (browser.isNWJS()) {
-            return (_, onSuccess, onFailure) => {
+            return (onSuccess, onFailure) => {
                 window.JitsiMeetNW.obtainDesktopStream(
                     onSuccess,
                     (error, constraints) => {
@@ -94,6 +94,23 @@ const ScreenObtainer = {
     },
 
     /**
+     * Gets the appropriate constraints for audio sharing.
+     *
+     * @returns {Object|boolean}
+     */
+    _getAudioConstraints() {
+        const { audioQuality } = this.options;
+        const audio = audioQuality?.stereo ? {
+            autoGainControl: false,
+            channelCount: 2,
+            echoCancellation: false,
+            noiseSuppression: false
+        } : true;
+
+        return audio;
+    },
+
+    /**
      * Checks whether obtaining a screen capture is supported in the current
      * environment.
      * @returns {boolean}
@@ -105,43 +122,79 @@ const ScreenObtainer = {
     /**
      * Obtains a screen capture stream on Electron.
      *
-     * @param {Object} [options] - Screen sharing options.
-     * @param {Array<string>} [options.desktopSharingSources] - Array with the
-     * sources that have to be displayed in the desktop picker window ('screen',
-     * 'window', etc.).
      * @param onSuccess - Success callback.
      * @param onFailure - Failure callback.
      */
-    obtainScreenOnElectron(options = {}, onSuccess, onFailure) {
-        if (window.JitsiMeetScreenObtainer
-            && window.JitsiMeetScreenObtainer.openDesktopPicker) {
-            const { desktopSharingSources, gumOptions } = options;
+    obtainScreenOnElectron(onSuccess, onFailure) {
+        if (window.JitsiMeetScreenObtainer && window.JitsiMeetScreenObtainer.openDesktopPicker) {
+            const { desktopSharingFrameRate, desktopSharingSources } = this.options;
 
             window.JitsiMeetScreenObtainer.openDesktopPicker(
                 {
                     desktopSharingSources: desktopSharingSources || [ 'screen', 'window' ]
                 },
-                (streamId, streamType, screenShareAudio = false) =>
-                    onGetStreamResponse(
-                        {
-                            response: {
-                                streamId,
-                                streamType,
-                                screenShareAudio
-                            },
-                            gumOptions
-                        },
-                        onSuccess,
-                        onFailure
-                    ),
+                (streamId, streamType, screenShareAudio = false) => {
+                    if (streamId) {
+                        let audioConstraints = false;
+
+                        if (screenShareAudio) {
+                            audioConstraints = {};
+                            const optionalConstraints = this._getAudioConstraints();
+
+                            if (typeof optionalConstraints !== 'boolean') {
+                                audioConstraints = {
+                                    optional: optionalConstraints
+                                };
+                            }
+
+                            // Audio screen sharing for electron only works for screen type devices.
+                            // i.e. when the user shares the whole desktop.
+                            // Note. The documentation specifies that chromeMediaSourceId should not be present
+                            // which, in the case a users has multiple monitors, leads to them being shared all
+                            // at once. However we tested with chromeMediaSourceId present and it seems to be
+                            // working properly.
+                            if (streamType === 'screen') {
+                                audioConstraints.mandatory = {
+                                    chromeMediaSource: 'desktop'
+                                };
+                            }
+                        }
+
+                        const constraints = {
+                            audio: audioConstraints,
+                            video: {
+                                mandatory: {
+                                    chromeMediaSource: 'desktop',
+                                    chromeMediaSourceId: streamId,
+                                    minFrameRate: desktopSharingFrameRate?.min ?? SS_DEFAULT_FRAME_RATE,
+                                    maxFrameRate: desktopSharingFrameRate?.max ?? SS_DEFAULT_FRAME_RATE,
+                                    maxWidth: window.screen.width,
+                                    maxHeight: window.screen.height
+                                }
+                            }
+                        };
+
+                        // We have to use the old API on Electron to get a desktop stream.
+                        navigator.mediaDevices.getUserMedia(constraints)
+                            .then(stream => onSuccess({
+                                stream,
+                                sourceId: streamId,
+                                sourceType: streamType
+                            }), onFailure);
+                    } else {
+                        // As noted in Chrome Desktop Capture API:
+                        // If user didn't select any source (i.e. canceled the prompt)
+                        // then the callback is called with an empty streamId.
+                        onFailure(new JitsiTrackError(JitsiTrackErrors.SCREENSHARING_USER_CANCELED));
+                    }
+                },
                 err => onFailure(new JitsiTrackError(
                     JitsiTrackErrors.ELECTRON_DESKTOP_PICKER_ERROR,
                     err
                 ))
             );
         } else {
-            onFailure(new JitsiTrackError(
-                JitsiTrackErrors.ELECTRON_DESKTOP_PICKER_NOT_FOUND));
+            onFailure(new JitsiTrackError(JitsiTrackErrors.ELECTRON_DESKTOP_PICKER_NOT_FOUND));
         }
     },
 
@@ -151,9 +204,7 @@ const ScreenObtainer = {
      * @param callback - The success callback.
      * @param errorCallback - The error callback.
      */
-    obtainScreenFromGetDisplayMedia(options, callback, errorCallback) {
-        logger.info('Using getDisplayMedia for screen sharing');
-
+    obtainScreenFromGetDisplayMedia(callback, errorCallback) {
         let getDisplayMedia;
 
         if (navigator.getDisplayMedia) {
@@ -163,32 +214,27 @@ const ScreenObtainer = {
             getDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
         }
 
-        getDisplayMedia({
-            video: true,
-            audio: true,
+        const { desktopSharingFrameRate } = this.options;
+        const video = typeof desktopSharingFrameRate === 'object' ? { frameRate: desktopSharingFrameRate } : true;
+        const audio = this._getAudioConstraints();
+
+        // At the time of this writing 'min' constraint for fps is not supported by getDisplayMedia.
+        video.frameRate && delete video.frameRate.min;
+
+        const constraints = {
+            video,
+            audio,
             cursor: 'always'
-        })
+        };
+
+        logger.info('Using getDisplayMedia for screen sharing', constraints);
+
+        getDisplayMedia(constraints)
             .then(stream => {
-                let applyConstraintsPromise;
-
-                if (stream
-                    && stream.getTracks()
-                    && stream.getTracks().length > 0) {
-                    const videoTrack = stream.getVideoTracks()[0];
-
-                    // Apply video track constraint.
-                    if (videoTrack) {
-                        applyConstraintsPromise = videoTrack.applyConstraints(options.trackOptions);
-                    }
-                } else {
-                    applyConstraintsPromise = Promise.resolve();
-                }
-
-                applyConstraintsPromise.then(() =>
-                    callback({
-                        stream,
-                        sourceId: stream.id
-                    }));
+                callback({
+                    stream,
+                    sourceId: stream.id
+                });
             })
             .catch(error => {
                 const errorDetails = {
@@ -197,7 +243,7 @@ const ScreenObtainer = {
                     errorStack: error && error.stack
                 };
 
-                logger.error('getDisplayMedia error', errorDetails);
+                logger.error('getDisplayMedia error', constraints, errorDetails);
 
                 if (errorDetails.errorMsg && errorDetails.errorMsg.indexOf('denied by system') !== -1) {
                     // On Chrome this is the only thing different between error returned when user cancels
@@ -217,7 +263,7 @@ const ScreenObtainer = {
      * @param callback - The success callback.
      * @param errorCallback - The error callback.
      */
-    obtainScreenFromGetDisplayMediaRN(options, callback, errorCallback) {
+    obtainScreenFromGetDisplayMediaRN(callback, errorCallback) {
         logger.info('Using getDisplayMedia for screen sharing');
 
         navigator.mediaDevices.getDisplayMedia({ video: true })
@@ -230,61 +276,22 @@ const ScreenObtainer = {
                 errorCallback(new JitsiTrackError(JitsiTrackErrors
                     .SCREENSHARING_USER_CANCELED));
             });
+    },
+
+    /**
+     * Sets the max frame rate to be used for a desktop track capture.
+     *
+     * @param {number} maxFps capture frame rate to be used for desktop tracks.
+     * @returns {void}
+     */
+    setDesktopSharingFrameRate(maxFps) {
+        logger.info(`Setting the desktop capture rate to ${maxFps}`);
+
+        this.options.desktopSharingFrameRate = {
+            min: SS_DEFAULT_FRAME_RATE,
+            max: maxFps
+        };
     }
 };
-
-/**
- * Handles response from external application / extension and calls GUM to
- * receive the desktop streams or reports error.
- * @param {object} options
- * @param {object} options.response
- * @param {string} options.response.streamId - the streamId for the desktop
- * stream.
- * @param {bool}   options.response.screenShareAudio - Used by electron clients to
- * enable system audio screen sharing.
- * @param {string} options.response.error - error to be reported.
- * @param {object} options.gumOptions - options passed to GUM.
- * @param {Function} onSuccess - callback for success.
- * @param {Function} onFailure - callback for failure.
- * @param {object} gumOptions - options passed to GUM.
- */
-function onGetStreamResponse(
-        options = {
-            response: {},
-            gumOptions: {}
-        },
-        onSuccess,
-        onFailure) {
-    const { streamId, streamType, screenShareAudio, error } = options.response || {};
-
-    if (streamId) {
-        const gumOptions = {
-            desktopStream: streamId,
-            screenShareAudio,
-            ...options.gumOptions
-        };
-
-        gumFunction([ 'desktop' ], gumOptions)
-            .then(stream => onSuccess({
-                stream,
-                sourceId: streamId,
-                sourceType: streamType
-            }), onFailure);
-    } else {
-        // As noted in Chrome Desktop Capture API:
-        // If user didn't select any source (i.e. canceled the prompt)
-        // then the callback is called with an empty streamId.
-        if (streamId === '') {
-            onFailure(new JitsiTrackError(
-                JitsiTrackErrors.SCREENSHARING_USER_CANCELED));
-
-            return;
-        }
-
-        onFailure(new JitsiTrackError(
-            JitsiTrackErrors.SCREENSHARING_GENERIC_ERROR,
-            error));
-    }
-}
 
 export default ScreenObtainer;

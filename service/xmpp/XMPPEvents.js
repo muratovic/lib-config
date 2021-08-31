@@ -7,6 +7,10 @@ const XMPPEvents = {
     // Designates an event indicating that the focus has asked us to mute our
     // audio.
     AUDIO_MUTED_BY_FOCUS: 'xmpp.audio_muted_by_focus',
+
+    // Designates an event indicating that the focus has asked us to disable our
+    // camera.
+    VIDEO_MUTED_BY_FOCUS: 'xmpp.video_muted_by_focus',
     AUTHENTICATION_REQUIRED: 'xmpp.authentication_required',
     BRIDGE_DOWN: 'xmpp.bridge_down',
 
@@ -49,6 +53,10 @@ const XMPPEvents = {
     // Designates an event indicating that the media (ICE) connection failed.
     // This should go to the RTC module.
     CONNECTION_ICE_FAILED: 'xmpp.connection.ice.failed',
+
+    // Designates an event indicating that the call has been migrated to a different
+    // bridge and that the client needs to be restarted for a successful transition.
+    CONNECTION_RESTARTED: 'xmpp.connection.restart',
 
     /**
      * Designates an event indicating connection status changes.
@@ -280,6 +288,26 @@ const XMPPEvents = {
      * Event fired when conference creation timestamp is received.
      */
     CONFERENCE_TIMESTAMP_RECEIVED: 'xmpp.conference_timestamp_received',
+
+    /**
+     * Event fired when we receive a message for AV moderation approved for the local participant.
+     */
+    AV_MODERATION_APPROVED: 'xmpp.av_moderation.approved',
+
+    /**
+     * Event fired when we receive a message for AV moderation.
+     */
+    AV_MODERATION_RECEIVED: 'xmpp.av_moderation.received',
+
+    /**
+     * Event fired when the moderation enable/disable changes.
+     */
+    AV_MODERATION_CHANGED: 'xmpp.av_moderation.changed',
+
+    /**
+     * Event fired when we receive message that a new jid was approved.
+     */
+    AV_MODERATION_PARTICIPANT_APPROVED: 'xmpp.av_moderation.participant.approved',
 
     // Designates an event indicating that we should join the conference with
     // audio and/or video muted.

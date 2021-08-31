@@ -14,11 +14,11 @@ const RTCEvents = {
     LASTN_ENDPOINT_CHANGED: 'rtc.lastn_endpoint_changed',
 
     /**
-     * Event emitted when the user granted a permission for the camera / mic.
+     * Event emitted when the user granted/blocked a permission for the camera / mic.
      * Used to keep track of the granted permissions on browsers which don't
      * support the Permissions API.
      */
-    GRANTED_PERMISSIONS: 'rtc.granted_permissions',
+    PERMISSIONS_CHANGED: 'rtc.permissions_changed',
 
     SENDER_VIDEO_CONSTRAINTS_CHANGED: 'rtc.sender_video_constraints_changed',
 
@@ -87,6 +87,11 @@ const RTCEvents = {
      * data channel.
      */
     ENDPOINT_MESSAGE_RECEIVED: 'rtc.endpoint_message_received',
+
+    /**
+     * Indicates that the remote endpoint stats have been received on data channnel.
+     */
+    ENDPOINT_STATS_RECEIVED: 'rtc.endpoint_stats_received',
 
     /**
      * Designates an event indicating that the local ICE username fragment of

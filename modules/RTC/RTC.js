@@ -3,9 +3,9 @@
 import { getLogger } from 'jitsi-meet-logger';
 
 import * as JitsiConferenceEvents from '../../JitsiConferenceEvents';
+import BridgeVideoType from '../../service/RTC/BridgeVideoType';
 import * as MediaType from '../../service/RTC/MediaType';
 import RTCEvents from '../../service/RTC/RTCEvents';
-import VideoType from '../../service/RTC/VideoType';
 import browser from '../browser';
 import Statistics from '../statistics/statistics';
 import GlobalOnErrorHandler from '../util/GlobalOnErrorHandler';
@@ -34,36 +34,6 @@ let peerConnectionIdCounter = 0;
 let rtcTrackIdCounter = 0;
 
 /**
- *
- * @param tracksInfo
- * @param options
- */
-function createLocalTracks(tracksInfo, options) {
-    const newTracks = [];
-    let deviceId = null;
-
-    tracksInfo.forEach(trackInfo => {
-        if (trackInfo.mediaType === MediaType.AUDIO) {
-            deviceId = options.micDeviceId;
-        } else if (trackInfo.videoType === VideoType.CAMERA) {
-            deviceId = options.cameraDeviceId;
-        }
-        rtcTrackIdCounter = safeCounterIncrement(rtcTrackIdCounter);
-        const localTrack = new JitsiLocalTrack({
-            ...trackInfo,
-            deviceId,
-            facingMode: options.facingMode,
-            rtcId: rtcTrackIdCounter,
-            effects: options.effects
-        });
-
-        newTracks.push(localTrack);
-    });
-
-    return newTracks;
-}
-
-/**
  * Creates {@code JitsiLocalTrack} instances from the passed in meta information
  * about MedieaTracks.
  *
@@ -78,7 +48,7 @@ function createLocalTracks(tracksInfo, options) {
  *     effects: Array of effect types
  * }}
  */
-function _newCreateLocalTracks(mediaStreamMetaData = []) {
+function _createLocalTracks(mediaStreamMetaData = []) {
     return mediaStreamMetaData.map(metaData => {
         const {
             sourceId,
@@ -147,7 +117,7 @@ export default class RTC extends Listenable {
          * @private
          * @type {number}
          */
-        this._lastN = -1;
+        this._lastN = undefined;
 
         /**
          * Defines the last N endpoints list. It can be null or an array once
@@ -156,11 +126,6 @@ export default class RTC extends Listenable {
          * @private
          */
         this._lastNEndpoints = null;
-
-        /*
-         * Holds the sender video constraints signaled from the bridge.
-         */
-        this._senderVideoConstraints = {};
 
         /**
          * The number representing the maximum video height the local client
@@ -172,20 +137,12 @@ export default class RTC extends Listenable {
         this._maxFrameHeight = undefined;
 
         /**
-         * The endpoint ID of currently pinned participant or <tt>null</tt> if
-         * no user is pinned.
-         * @type {string|null}
-         * @private
-         */
-        this._pinnedEndpoint = null;
-
-        /**
          * The endpoint IDs of currently selected participants.
          *
          * @type {Array}
          * @private
          */
-        this._selectedEndpoints = [];
+        this._selectedEndpoints = null;
 
         // The last N change listener.
         this._lastNChangeListener = this._onLastNChanged.bind(this);
@@ -193,6 +150,9 @@ export default class RTC extends Listenable {
         this._onDeviceListChanged = this._onDeviceListChanged.bind(this);
         this._updateAudioOutputForAudioTracks
             = this._updateAudioOutputForAudioTracks.bind(this);
+
+        // The default video type assumed by the bridge.
+        this._videoType = BridgeVideoType.NONE;
 
         // Switch audio output device on all remote audio tracks. Local audio
         // tracks handle this event by themselves.
@@ -215,20 +175,8 @@ export default class RTC extends Listenable {
      * @returns {void}
      */
     destroy() {
-        RTCUtils.removeListener(
-            RTCEvents.AUDIO_OUTPUT_DEVICE_CHANGED,
-            this._updateAudioOutputForAudioTracks
-        );
-
-        RTCUtils.removeListener(
-            RTCEvents.DEVICE_LIST_CHANGED,
-            this._onDeviceListChanged
-        );
-
-        this.removeListener(
-            RTCEvents.LASTN_ENDPOINT_CHANGED,
-            this._lastNChangeListener
-        );
+        RTCUtils.removeListener(RTCEvents.AUDIO_OUTPUT_DEVICE_CHANGED, this._updateAudioOutputForAudioTracks);
+        RTCUtils.removeListener(RTCEvents.DEVICE_LIST_CHANGED, this._onDeviceListChanged);
 
         if (this._channelOpenListener) {
             this.removeListener(
@@ -245,8 +193,8 @@ export default class RTC extends Listenable {
      * @param {Array<Object>} tracksInfo
      * @returns {Array<JitsiLocalTrack>}
      */
-    static newCreateLocalTracks(tracksInfo) {
-        return _newCreateLocalTracks(tracksInfo);
+    static createLocalTracks(tracksInfo) {
+        return _createLocalTracks(tracksInfo);
     }
 
     /**
@@ -259,18 +207,8 @@ export default class RTC extends Listenable {
      * @returns {*} Promise object that will receive the new JitsiTracks
      */
     static obtainAudioAndVideoPermissions(options) {
-        const usesNewGumFlow = browser.usesNewGumFlow();
-        const obtainMediaPromise = usesNewGumFlow
-            ? RTCUtils.newObtainAudioAndVideoPermissions(options)
-            : RTCUtils.obtainAudioAndVideoPermissions(options);
-
-        return obtainMediaPromise.then(tracksInfo => {
-            if (usesNewGumFlow) {
-                return _newCreateLocalTracks(tracksInfo);
-            }
-
-            return createLocalTracks(tracksInfo, options);
-        });
+        return RTCUtils.obtainAudioAndVideoPermissions(options)
+            .then(tracksInfo => _createLocalTracks(tracksInfo));
     }
 
     /**
@@ -282,52 +220,57 @@ export default class RTC extends Listenable {
      * @param {string} [wsUrl] WebSocket URL.
      */
     initializeBridgeChannel(peerconnection, wsUrl) {
-        this._channel = new BridgeChannel(
-            peerconnection, wsUrl, this.eventEmitter, this._senderVideoConstraintsChanged.bind(this));
+        this._channel = new BridgeChannel(peerconnection, wsUrl, this.eventEmitter);
 
         this._channelOpenListener = () => {
-            // When the channel becomes available, tell the bridge about
-            // video selections so that it can do adaptive simulcast,
-            // we want the notification to trigger even if userJid
-            // is undefined, or null.
-            try {
-                this._channel.sendPinnedEndpointMessage(
-                    this._pinnedEndpoint);
-                this._channel.sendSelectedEndpointsMessage(
-                    this._selectedEndpoints);
-
-                if (typeof this._maxFrameHeight !== 'undefined') {
-                    this._channel.sendReceiverVideoConstraintMessage(
-                        this._maxFrameHeight);
-                }
-            } catch (error) {
+            const logError = (error, msgType, value) => {
                 GlobalOnErrorHandler.callErrorHandler(error);
-                logger.error(
-                    `Cannot send selected(${this._selectedEndpoint})`
-                    + `pinned(${this._pinnedEndpoint})`
-                    + `frameHeight(${this._maxFrameHeight}) endpoint message`,
-                    error);
+                logger.error(`Cannot send ${msgType}(${JSON.stringify(value)}) endpoint message`, error);
+            };
+
+            // When the channel becomes available, tell the bridge about video selections so that it can do adaptive
+            // simulcast, we want the notification to trigger even if userJid is undefined, or null.
+            if (this._receiverVideoConstraints) {
+                try {
+                    this._channel.sendNewReceiverVideoConstraintsMessage(this._receiverVideoConstraints);
+                } catch (error) {
+                    logError(error, 'ReceiverVideoConstraints', this._receiverVideoConstraints);
+                }
+            }
+            if (this._selectedEndpoints) {
+                try {
+                    this._channel.sendSelectedEndpointsMessage(this._selectedEndpoints);
+                } catch (error) {
+                    logError(error, 'SelectedEndpointsChangedEvent', this._selectedEndpoint);
+                }
+            }
+            if (typeof this._maxFrameHeight !== 'undefined') {
+                try {
+                    this._channel.sendReceiverVideoConstraintMessage(this._maxFrameHeight);
+                } catch (error) {
+                    logError(error, 'ReceiverVideoConstraint', this._maxFrameHeight);
+                }
+            }
+            if (typeof this._lastN !== 'undefined' && this._lastN !== -1) {
+                try {
+                    this._channel.sendSetLastNMessage(this._lastN);
+                } catch (error) {
+                    logError(error, 'LastNChangedEvent', this._lastN);
+                }
+            }
+            try {
+                this._channel.sendVideoTypeMessage(this._videoType);
+            } catch (error) {
+                logError(error, 'VideoTypeMessage', this._videoType);
             }
 
-            this.removeListener(RTCEvents.DATA_CHANNEL_OPEN,
-                this._channelOpenListener);
+            this.removeListener(RTCEvents.DATA_CHANNEL_OPEN, this._channelOpenListener);
             this._channelOpenListener = null;
-
-            // If setLastN was invoked before the bridge channel completed
-            // opening, apply the specified value now that the channel
-            // is open. NOTE that -1 is the default value assumed by both
-            // RTC module and the JVB.
-            if (this._lastN !== -1) {
-                this._channel.sendSetLastNMessage(this._lastN);
-            }
         };
-
-        this.addListener(RTCEvents.DATA_CHANNEL_OPEN,
-            this._channelOpenListener);
+        this.addListener(RTCEvents.DATA_CHANNEL_OPEN, this._channelOpenListener);
 
         // Add Last N change listener.
-        this.addListener(RTCEvents.LASTN_ENDPOINT_CHANGED,
-            this._lastNChangeListener);
+        this.addListener(RTCEvents.LASTN_ENDPOINT_CHANGED, this._lastNChangeListener);
     }
 
     /**
@@ -340,18 +283,6 @@ export default class RTC extends Listenable {
      */
     _onDeviceListChanged() {
         this._updateAudioOutputForAudioTracks(RTCUtils.getAudioOutputDevice());
-    }
-
-    /**
-     * Notifies this instance that the sender video constraints signaled from the bridge have changed.
-     *
-     * @param {Object} senderVideoConstraints the sender video constraints from the bridge.
-     * @private
-     */
-    _senderVideoConstraintsChanged(senderVideoConstraints) {
-        logger.info('Remote max frame height received on bridge channel: ', JSON.stringify(senderVideoConstraints));
-        this._senderVideoConstraints = senderVideoConstraints;
-        this.eventEmitter.emit(RTCEvents.SENDER_VIDEO_CONSTRAINTS_CHANGED);
     }
 
     /**
@@ -399,6 +330,29 @@ export default class RTC extends Listenable {
     }
 
     /**
+     * Sets the capture frame rate to be used for desktop tracks.
+     *
+     * @param {number} maxFps framerate to be used for desktop track capture.
+     */
+    setDesktopSharingFrameRate(maxFps) {
+        RTCUtils.setDesktopSharingFrameRate(maxFps);
+    }
+
+    /**
+     * Sets the receiver video constraints that determine how bitrate is allocated to each of the video streams
+     * requested from the bridge. The constraints are cached and sent through the bridge channel once the channel
+     * is established.
+     * @param {*} constraints
+     */
+    setNewReceiverVideoConstraints(constraints) {
+        this._receiverVideoConstraints = constraints;
+
+        if (this._channel && this._channel.isOpen()) {
+            this._channel.sendNewReceiverVideoConstraintsMessage(constraints);
+        }
+    }
+
+    /**
      * Sets the maximum video size the local participant should receive from
      * remote participants. Will cache the value and send it through the channel
      * once it is created.
@@ -412,6 +366,23 @@ export default class RTC extends Listenable {
 
         if (this._channel && this._channel.isOpen()) {
             this._channel.sendReceiverVideoConstraintMessage(maxFrameHeight);
+        }
+    }
+
+    /**
+     * Sets the video type and availability for the local video source.
+     *
+     * @param {string} videoType 'camera' for camera, 'desktop' for screenshare and
+     * 'none' for when local video source is muted or removed from the peerconnection.
+     * @returns {void}
+     */
+    setVideoType(videoType) {
+        if (this._videoType !== videoType) {
+            this._videoType = videoType;
+
+            if (this._channel && this._channel.isOpen()) {
+                this._channel.sendVideoTypeMessage(videoType);
+            }
         }
     }
 
@@ -431,22 +402,6 @@ export default class RTC extends Listenable {
 
         if (this._channel && this._channel.isOpen()) {
             this._channel.sendSelectedEndpointsMessage(ids);
-        }
-    }
-
-    /**
-     * Elects the participant with the given id to be the pinned participant in
-     * order to always receive video for this participant (even when last n is
-     * enabled).
-     * @param {stirng} id The user id.
-     * @throws NetworkError or InvalidStateError or Error if the operation
-     * fails.
-     */
-    pinEndpoint(id) {
-        // Cache the value if channel is missing, till we open it.
-        this._pinnedEndpoint = id;
-        if (this._channel && this._channel.isOpen()) {
-            this._channel.sendPinnedEndpointMessage(id);
         }
     }
 
@@ -504,7 +459,7 @@ export default class RTC extends Listenable {
      * @return {TraceablePeerConnection}
      */
     createPeerConnection(signaling, iceConfig, isP2P, options) {
-        const pcConstraints = RTC.getPCConstraints(isP2P);
+        const pcConstraints = JSON.parse(JSON.stringify(RTCUtils.pcConstraints));
 
         if (typeof options.abtestSuspendVideo !== 'undefined') {
             RTCUtils.setSuspendVideo(pcConstraints, options.abtestSuspendVideo);
@@ -518,11 +473,12 @@ export default class RTC extends Listenable {
         if (options.enableInsertableStreams) {
             logger.debug('E2EE - setting insertable streams constraints');
             iceConfig.encodedInsertableStreams = true;
-            iceConfig.forceEncodedAudioInsertableStreams = true; // legacy, to be removed in M88.
-            iceConfig.forceEncodedVideoInsertableStreams = true; // legacy, to be removed in M88.
         }
 
-        if (browser.supportsSdpSemantics()) {
+        const supportsSdpSemantics = browser.isReactNative()
+            || (browser.isChromiumBased() && !options.usesUnifiedPlan);
+
+        if (supportsSdpSemantics) {
             iceConfig.sdpSemantics = 'plan-b';
         }
 
@@ -588,22 +544,6 @@ export default class RTC extends Listenable {
     }
 
     /**
-     * Returns the current value for "lastN" - the amount of videos are going
-     * to be delivered. When set to -1 for unlimited or all available videos.
-     * @return {number}
-     */
-    getLastN() {
-        return this._lastN;
-    }
-
-    /**
-     * @return {Object} The sender video constraints signaled from the brridge.
-     */
-    getSenderVideoConstraints() {
-        return this._senderVideoConstraints;
-    }
-
-    /**
      * Get local video track.
      * @returns {JitsiLocalTrack|undefined}
      */
@@ -623,6 +563,14 @@ export default class RTC extends Listenable {
 
 
         return localAudio.length ? localAudio[0] : undefined;
+    }
+
+    /**
+     * Returns the endpoint id for the local user.
+     * @returns {string}
+     */
+    getLocalEndpointId() {
+        return this.conference.myUserId();
     }
 
     /**
@@ -681,6 +629,25 @@ export default class RTC extends Listenable {
     }
 
     /**
+    * Set mute for all local video streams attached to the conference.
+    * @param value The mute value.
+    * @returns {Promise}
+    */
+    setVideoMute(value) {
+        const mutePromises = [];
+
+        this.getLocalTracks(MediaType.VIDEO).concat(this.getLocalTracks(MediaType.PRESENTER))
+            .forEach(videoTrack => {
+                // this is a Promise
+                mutePromises.push(value ? videoTrack.mute() : videoTrack.unmute());
+            });
+
+        // We return a Promise from all Promises so we can wait for their
+        // execution.
+        return Promise.all(mutePromises);
+    }
+
+    /**
      *
      * @param track
      */
@@ -692,43 +659,6 @@ export default class RTC extends Listenable {
         }
 
         this.localTracks.splice(pos, 1);
-    }
-
-    /**
-     * Removes all JitsiRemoteTracks associated with given MUC nickname
-     * (resource part of the JID). Returns array of removed tracks.
-     *
-     * @param {string} Owner The resource part of the MUC JID.
-     * @returns {JitsiRemoteTrack[]}
-     */
-    removeRemoteTracks(owner) {
-        let removedTracks = [];
-
-        for (const tpc of this.peerConnections.values()) {
-            const pcRemovedTracks = tpc.removeRemoteTracks(owner);
-
-            removedTracks = removedTracks.concat(pcRemovedTracks);
-        }
-
-        logger.debug(
-            `Removed remote tracks for ${owner}`
-                + ` count: ${removedTracks.length}`);
-
-        return removedTracks;
-    }
-
-    /**
-     *
-     */
-    static getPCConstraints(isP2P) {
-        const pcConstraints
-            = isP2P ? RTCUtils.p2pPcConstraints : RTCUtils.pcConstraints;
-
-        if (!pcConstraints) {
-            return {};
-        }
-
-        return JSON.parse(JSON.stringify(pcConstraints));
     }
 
     /**
@@ -803,6 +733,14 @@ export default class RTC extends Listenable {
      */
     static getCurrentlyAvailableMediaDevices() {
         return RTCUtils.getCurrentlyAvailableMediaDevices();
+    }
+
+    /**
+     * Returns whether available devices have permissions granted
+     * @returns {Boolean}
+     */
+    static arePermissionsGrantedForAvailableDevices() {
+        return RTCUtils.arePermissionsGrantedForAvailableDevices();
     }
 
     /**
@@ -891,8 +829,7 @@ export default class RTC extends Listenable {
             this._channel.close();
             this._channel = null;
 
-            this.removeListener(RTCEvents.LASTN_ENDPOINT_CHANGED,
-                this._lastNChangeListener);
+            this.removeListener(RTCEvents.LASTN_ENDPOINT_CHANGED, this._lastNChangeListener);
         }
     }
 
@@ -921,8 +858,6 @@ export default class RTC extends Listenable {
         track.setAudioLevel(audioLevel, tpc);
     }
 
-    /* eslint-enable max-params */
-
     /**
      * Sends message via the bridge channel.
      * @param {string} to The id of the endpoint that should receive the
@@ -936,6 +871,17 @@ export default class RTC extends Listenable {
             this._channel.sendMessage(to, payload);
         } else {
             throw new Error('Channel support is disabled!');
+        }
+    }
+
+    /**
+     * Sends the local stats via the bridge channel.
+     * @param {Object} payload The payload of the message.
+     * @throws NetworkError/InvalidStateError/Error if the operation fails or if there is no data channel created.
+     */
+    sendEndpointStatsMessage(payload) {
+        if (this._channel && this._channel.isOpen()) {
+            this._channel.sendEndpointStatsMessage(payload);
         }
     }
 
