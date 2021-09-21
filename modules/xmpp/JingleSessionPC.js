@@ -48,6 +48,16 @@ const DEFAULT_MAX_STATS = 300;
 const ICE_CAND_GATHERING_TIMEOUT = 150;
 
 /**
+ * Reads the endpoint ID given a string which represents either the endpoint's full JID, or the endpoint ID itself.
+ * @param {String} jidOrEndpointId A string which is either the full JID of a participant, or the ID of an
+ * endpoint/participant.
+ * @returns The endpoint ID associated with 'jidOrEndpointId'.
+ */
+function getEndpointId(jidOrEndpointId) {
+    return Strophe.getResourceFromJid(jidOrEndpointId) || jidOrEndpointId;
+}
+
+/**
  * @typedef {Object} JingleSessionPCOptions
  * @property {Object} abTesting - A/B testing related options (ask George).
  * @property {boolean} abTesting.enableSuspendVideoTest - enables the suspend
@@ -559,6 +569,28 @@ export default class JingleSessionPC extends JingleSession {
             }
         };
 
+
+        /**
+         * The connection state event is fired whenever the aggregate of underlying
+         * transports change their state.
+         */
+        this.peerconnection.onconnectionstatechange = () => {
+            const icestate = this.peerconnection.iceConnectionState;
+
+            switch (this.peerconnection.connectionState) {
+            case 'failed':
+                // Since version 76 Chrome no longer switches ICE connection
+                // state to failed (see
+                // https://bugs.chromium.org/p/chromium/issues/detail?id=982793
+                // for details) we use this workaround to recover from lost connections
+                if (icestate === 'disconnected') {
+                    this.room.eventEmitter.emit(
+                        XMPPEvents.CONNECTION_ICE_FAILED, this);
+                }
+                break;
+            }
+        };
+
         /**
          * The negotiationneeded event is fired whenever we shake the media on the
          * RTCPeerConnection object.
@@ -864,7 +896,7 @@ export default class JingleSessionPC extends JingleSession {
                             } else {
                                 this.signalingLayer.setSSRCOwner(
                                     ssrc,
-                                    Strophe.getResourceFromJid(owner));
+                                    getEndpointId(owner));
                             }
                         }
                     });

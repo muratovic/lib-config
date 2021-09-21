@@ -175,7 +175,7 @@ export default class XMPP extends Listenable {
 
         this._initStrophePlugins();
 
-        this.caps = new Caps(this.connection, this.options.clientNode);
+        this.caps = new Caps(this.connection, /* clientNode */ 'https://jitsi.org/jitsi-meet');
 
         // Initialize features advertised in disco-info
         this.initFeaturesList();
@@ -206,6 +206,7 @@ export default class XMPP extends Listenable {
         this.caps.addFeature('urn:xmpp:jingle:transports:dtls-sctp:1');
         this.caps.addFeature('urn:xmpp:jingle:apps:rtp:audio');
         this.caps.addFeature('urn:xmpp:jingle:apps:rtp:video');
+        this.caps.addFeature('http://jitsi.org/json-encoded-sources');
 
         // Disable RTX on Firefox 83 and older versions because of
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1668028
@@ -545,7 +546,7 @@ export default class XMPP extends Listenable {
         // check for shard name in identities
         identities.forEach(i => {
             if (i.type === 'shard') {
-                this.options.deploymentInfo.shard = i.name;
+                this.options.deploymentInfo.shard = this.connection.shard = i.name;
             }
         });
 
