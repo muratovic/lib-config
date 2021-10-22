@@ -387,7 +387,7 @@ export default class ChatRoom extends Listenable {
 
             const features = $(result).find('>query>feature').toArray().map(item => item.attributes[0].value);
 
-            this.eventEmitter.emit(XMPPEvents.MUC_ROOM_ALL_FEATURES, features);
+            this.eventEmitter.emit(XMPPEvents.MUC_ROOM_ALL_FEATURES_CHANGED, features);
 
         }, error => {
             GlobalOnErrorHandler.callErrorHandler(error);
