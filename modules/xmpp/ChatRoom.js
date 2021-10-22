@@ -385,9 +385,9 @@ export default class ChatRoom extends Listenable {
                 this.eventEmitter.emit(XMPPEvents.MUC_MEMBERS_ONLY_CHANGED, membersOnly);
             }
 
-            const recordingFeatureActive = $(result).find('>query>feature[var="recording"]').length === 1;
+            const features = $(result).find('>query>feature').toArray().map(item => item.attributes[0].value);
 
-            this.eventEmitter.emit(XMPPEvents.MUC_ROOM_RECORDING_FEATURE_CHANGED, recordingFeatureActive);
+            this.eventEmitter.emit(XMPPEvents.MUC_ROOM_ALL_FEATURES, features);
 
         }, error => {
             GlobalOnErrorHandler.callErrorHandler(error);

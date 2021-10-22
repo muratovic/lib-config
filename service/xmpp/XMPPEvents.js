@@ -199,8 +199,8 @@ const XMPPEvents = {
     // participant is host or not.
     MUC_ROOM_VISIBILITY_CHANGED: 'xmpp.muc_room_visibility_changed',
 
-    // Designates an event indicating that recording feature value is changed.
-    MUC_ROOM_RECORDING_FEATURE_CHANGED: 'xmpp.muc_room_recording_feature_changed',
+    // Designates an event indicating that all features are changed.
+    MUC_ROOM_ALL_FEATURES_CHANGED: 'xmpp.muc_room_all_features_changed',
 
     // Designates an event indicating that the MUC members only config has changed.
     MUC_MEMBERS_ONLY_CHANGED: 'xmpp.muc_members_only_changed',
