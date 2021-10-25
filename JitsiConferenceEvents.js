@@ -187,9 +187,9 @@ export const SEC_VALUE_CHANGED_FOR_SPECIAL_ROOM = 'conference.sec_value_changed_
 export const ROOM_VISIBILITY_CHANGED = 'conference.room_visibility_changed';
 
 /**
- * Indicates that the recording feature is changed.
+ * Indicates that all features are changed.
  */
-export const ROOM_RECORDING_FEATURE_CHANGED = 'conference.room_recording_feature_changed';
+export const ROOM_ALL_FEATURES_CHANGED = 'conference.room_all_features_changed';
 
 /**
  * Indicates that the region of the media server (jitsi-videobridge) that we

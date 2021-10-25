@@ -326,8 +326,8 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
     this.chatRoomForwarder.forward(XMPPEvents.MUC_ROOM_VISIBILITY_CHANGED,
         JitsiConferenceEvents.ROOM_VISIBILITY_CHANGED);
 
-    this.chatRoomForwarder.forward(XMPPEvents.MUC_ROOM_RECORDING_FEATURE_CHANGED,
-        JitsiConferenceEvents.ROOM_RECORDING_FEATURE_CHANGED);
+    this.chatRoomForwarder.forward(XMPPEvents.MUC_ROOM_ALL_FEATURES_CHANGED,
+        JitsiConferenceEvents.ROOM_ALL_FEATURES_CHANGED);
 
     this.chatRoomForwarder.forward(XMPPEvents.MUC_MEMBERS_ONLY_CHANGED,
         JitsiConferenceEvents.MEMBERS_ONLY_CHANGED);
