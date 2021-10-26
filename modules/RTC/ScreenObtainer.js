@@ -143,9 +143,7 @@ const ScreenObtainer = {
                                     chromeMediaSource: 'desktop',
                                     chromeMediaSourceId: streamId,
                                     minFrameRate: desktopSharingFrameRate?.min ?? SS_DEFAULT_FRAME_RATE,
-                                    maxFrameRate: desktopSharingFrameRate?.max ?? SS_DEFAULT_FRAME_RATE,
-                                    maxWidth: window.screen.width,
-                                    maxHeight: window.screen.height
+                                    maxFrameRate: desktopSharingFrameRate?.max ?? SS_DEFAULT_FRAME_RATE
                                 }
                             }
                         };
@@ -160,7 +158,9 @@ const ScreenObtainer = {
                                 },
                                 video: {
                                     mandatory: {
-                                        chromeMediaSource: 'desktop'
+                                        chromeMediaSource: 'desktop',
+                                        minFrameRate: desktopSharingFrameRate?.min ?? SS_DEFAULT_FRAME_RATE,
+                                        maxFrameRate: desktopSharingFrameRate?.max ?? SS_DEFAULT_FRAME_RATE
                                     }
                                 }
                             };
