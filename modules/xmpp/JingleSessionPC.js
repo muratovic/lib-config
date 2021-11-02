@@ -1908,6 +1908,8 @@ export default class JingleSessionPC extends JingleSession {
                             // Change the direction to "inactive" always for jvb connection.
                             remoteSdp.media[mid] = remoteSdp.media[mid]
                                 .replace(`a=${MediaDirection.SENDONLY}`, `a=${MediaDirection.INACTIVE}`);
+                            remoteSdp.media[mid] = remoteSdp.media[mid]
+                                .replace(`a=${MediaDirection.SENDRECV}`, `a=${MediaDirection.RECVONLY}`);
                         }
                     }
                 });
