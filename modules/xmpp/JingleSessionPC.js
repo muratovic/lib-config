@@ -1909,7 +1909,7 @@ export default class JingleSessionPC extends JingleSession {
                             remoteSdp.media[mid] = remoteSdp.media[mid]
                                 .replace(`a=${MediaDirection.SENDONLY}`, `a=${MediaDirection.INACTIVE}`);
                             remoteSdp.media[mid] = remoteSdp.media[mid]
-                                .replace(`a=${MediaDirection.SENDRECV}`, `a=${MediaDirection.RECVONLY}`);
+                                .replace(`a=${MediaDirection.SENDRECV}`, `a=${MediaDirection.INACTIVE}`);
                         }
                     }
                 });
