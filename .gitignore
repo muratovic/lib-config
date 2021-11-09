@@ -13,4 +13,3 @@ npm-*.log
 .DS_Store
 stats.json
 .vscode
-package-lock.json
