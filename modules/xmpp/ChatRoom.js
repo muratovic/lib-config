@@ -67,7 +67,7 @@ export const parser = {
  * @param pres the presence JSON
  * @param nodeName the name of the node (videomuted, audiomuted, etc)
  */
-function filterNodeFromPresenceJSON(pres, nodeName) {
+export function filterNodeFromPresenceJSON(pres, nodeName) {
     const res = [];
 
     for (let i = 0; i < pres.length; i++) {
@@ -123,6 +123,7 @@ export default class ChatRoom extends Listenable {
         this.presHandlers = {};
         this._removeConnListeners = [];
         this.joined = false;
+        this.inProgressEmitted = false;
         this.role = null;
         this.focusMucJid = null;
         this.noBridgeAvailable = false;
@@ -602,6 +603,15 @@ export default class ChatRoom extends Listenable {
                 break;
             }
             }
+        }
+
+        if (!this.joined && !this.inProgressEmitted) {
+            const now = this.connectionTimes['muc.join.started'] = window.performance.now();
+
+            logger.log('(TIME) MUC join started:\t', now);
+
+            this.eventEmitter.emit(XMPPEvents.MUC_JOIN_IN_PROGRESS);
+            this.inProgressEmitted = true;
         }
 
         if (from === this.myroomjid) {
@@ -1787,6 +1797,15 @@ export default class ChatRoom extends Listenable {
     }
 
     /**
+     * Returns the last presence advertised by a MUC member.
+     * @param {string} mucNick
+     * @returns {*}
+     */
+    getLastPresence(mucNick) {
+        return this.lastPresences[`${this.roomjid}/${mucNick}`];
+    }
+
+    /**
      * Returns true if the SIP calls are supported and false otherwise
      */
     isSIPCallingSupported() {
@@ -1860,7 +1879,7 @@ export default class ChatRoom extends Listenable {
      * @param mediaType
      */
     muteParticipant(jid, mute, mediaType) {
-        logger.info('set mute', mute);
+        logger.info('set mute', mute, jid);
         const iqToFocus = $iq(
             { to: this.focusMucJid,
                 type: 'set' })
@@ -1935,6 +1954,7 @@ export default class ChatRoom extends Listenable {
         this._removeConnListeners = [];
 
         this.joined = false;
+        this.inProgressEmitted = false;
     }
 
     /**
