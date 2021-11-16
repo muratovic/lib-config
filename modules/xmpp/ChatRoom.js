@@ -351,7 +351,7 @@ export default class ChatRoom extends Listenable {
                 everybodyCanRaiseHand);
             this.everybodyCanRaiseHand = everybodyCanRaiseHand;
 
-            if (locked && specialRoom && roomOwner) {
+            if (locked && roomOwner) {
                 const roomSecretValue
                     = $(result).find('>query>x[type="result"]>field[var="muc#roomconfig_roomsecret"]>value');
 
