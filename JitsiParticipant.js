@@ -227,7 +227,7 @@ export default class JitsiParticipant {
     _isMediaTypeMuted(mediaType) {
         return this.getTracks().reduce(
             (muted, track) =>
-                muted && (track.getType() !== mediaType || track.isMuted() || track.track?.muted),
+                muted && (track.getType() !== mediaType || track.isMuted()),
             true);
     }
 
